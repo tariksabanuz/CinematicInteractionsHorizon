@@ -98,27 +98,52 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
         {
             let offers = st.offers.clone();
             let lapis = st.inputs.get(1).cloned().flatten().map_or(0, |l| l.count as i32);
+            let has_item = st.inputs.first().cloned().flatten().is_some();
             let level = game.experience.level;
             let creative = game.creative;
+            let seed = game.level.xp_seed;
+            let seconds = game.started.elapsed().as_secs_f32();
+            let atlas = &game.gui.atlas;
+            // The lapis socket: a blue circle on the table, faint when empty, with the count above.
+            let corners = ci::lapis_socket(t, yaw);
+            let screen: Vec<Option<(f32, f32)>> = corners.iter().map(|c| ci::screen_of(*c, batch.width, batch.height)).collect();
+            if screen.iter().all(|c| c.is_some()) {
+                let c = [screen[0].unwrap(), screen[1].unwrap(), screen[2].unwrap(), screen[3].unwrap()];
+                ci::pixel_circle(batch, atlas, [[c[0].0, c[0].1], [c[1].0, c[1].1], [c[2].0, c[2].1], [c[3].0, c[3].1]], [96, 156, 255], if lapis > 0 { 0.95 } else { 0.5 });
+            }
+            if lapis > 1
+                && let Some((sx, sy)) = ci::screen_of(ci::spot_point(t, yaw, &ci::ENCHANTING_SPOTS[1]) + glam::DVec3::Y * 0.1, batch.width, batch.height)
+            {
+                let label = format!("x{lapis}");
+                let w = HudBatch::text_width(atlas, &label);
+                batch.text(atlas, &label, sx - w * 0.5, sy - 16.0, rgba(150, 175, 225, 255), false);
+            }
             let hovered = if over { ci::rune_at(x, y, batch.width, batch.height) } else { None };
             for (i, p) in ci::rune_points(t, yaw).iter().enumerate() {
                 let cost = offers.costs[i];
                 let Some((sx, sy)) = ci::screen_of(*p, batch.width, batch.height) else {
                     continue;
                 };
-                if cost <= 0 {
+                if cost <= 0 || !has_item {
                     continue;
                 }
                 let can = creative || (lapis > i as i32 && level >= cost);
-                let r = ci::RUNE_RADIUS * if hovered == Some(i) { 1.15 } else { 1.0 };
-                ci::disc(batch, &game.gui.atlas, sx, sy, r + 1.5, if can { rgba(200, 160, 255, 200) } else { rgba(70, 70, 76, 200) });
-                ci::disc(batch, &game.gui.atlas, sx, sy, r, if can { rgba(76, 38, 120, 225) } else { rgba(30, 30, 34, 225) });
+                let r = ci::CIRCLE_RADIUS * if hovered == Some(i) { 1.12 } else { 1.0 };
+                let turn = seconds * if i == 1 { -0.35 } else { 0.35 };
+                ci::magic_circle(batch, atlas, sx, sy, r, turn, if can { [200, 84, 255] } else { [150, 140, 170] }, if can { 1.0 } else { 0.55 });
                 let text = cost.to_string();
-                let w = HudBatch::text_width(&game.gui.atlas, &text);
-                batch.text(&game.gui.atlas, &text, sx - w * 0.5, sy - 6.0, if can { rgba(128, 255, 32, 255) } else { rgba(64, 127, 16, 255) }, true);
+                let w = HudBatch::text_width(atlas, &text);
+                let start = batch.vertices.len();
+                batch.text(atlas, &text, sx - w * 0.5, sy - 4.0, if can { rgba(255, 255, 255, 255) } else { rgba(150, 150, 160, 255) }, true);
+                batch.scale_since(start, sx, sy, 2.0, 2.0);
+                let clue = horizon_client::text::Text::styled(
+                    ci::clue_words(seed, i),
+                    horizon_client::text::Style { font: Some("minecraft:alt".into()), color: Some(if can { 0xFFD8CCFF } else { 0xFF8F8A99 }), ..Default::default() },
+                );
+                let cw = atlas.font.width_text(&clue);
+                batch.text_styled(atlas, &clue, sx - cw * 0.5, sy + r + 3.0, if can { rgba(216, 204, 255, 255) } else { rgba(143, 138, 153, 255) }, true);
                 for d in 0..=i {
-                    let dx = sx + (d as f32 - i as f32 * 0.5) * 4.0 - 1.0;
-                    batch.fill(&game.gui.atlas, dx, sy + 4.0, 2.0, 2.0, rgba(80, 130, 255, 255));
+                    ci::star(batch, atlas, sx + (d as f32 - i as f32 * 0.5) * 7.0, sy + r + 17.0, if lapis > i as i32 { [96, 150, 255] } else { [90, 90, 120] });
                 }
                 if hovered == Some(i) {
                     let mut lines: Vec<(Text, u32)> = Vec::new();
@@ -140,6 +165,30 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
                     }
                     lines.push((Text::literal("\u{a7}7Touch the rune to enchant"), u32::MAX));
                     extra = Some(lines);
+                }
+            }
+        }
+        // The anvil: the name of what lies on it floats above, with the cost of the work in green.
+        if kind == ci::Kind::Anvil
+            && let Some(st) = game.station.as_ref()
+        {
+            let shown = st.result.clone().or_else(|| st.inputs.first().cloned().flatten());
+            let cost = st.anvil.cost;
+            if let Some(stack) = shown
+                && let Some((sx, sy)) = ci::screen_of(ci::spot_point(t, yaw, &ci::ANVIL_SPOTS[0]) + glam::DVec3::Y * 0.2, batch.width, batch.height)
+            {
+                let atlas = &game.gui.atlas;
+                let label = ci::plain_name(&horizon_client::item_tooltip::name_line(&stack, &|k| game.pack.names.display_get(k)));
+                let w = HudBatch::text_width(atlas, &label);
+                let start = batch.vertices.len();
+                batch.text(atlas, &label, sx - w * 0.5, sy - 6.0, rgba(255, 255, 255, 255), true);
+                batch.scale_since(start, sx, sy, 1.4, 1.4);
+                if cost > 0 && st.result.is_some() {
+                    let text = cost.to_string();
+                    let cw = HudBatch::text_width(atlas, &text);
+                    let start = batch.vertices.len();
+                    batch.text(atlas, &text, sx - cw * 0.5, sy - 26.0, if game.creative || game.experience.level >= cost { rgba(128, 255, 32, 255) } else { rgba(255, 85, 85, 255) }, true);
+                    batch.scale_since(start, sx, sy - 22.0, 2.0, 2.0);
                 }
             }
         }
@@ -317,6 +366,14 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
                 match (result.as_ref(), kind) {
                     (Some(made), ci::Kind::Smithing) => {
                         lines.push((Text::literal(format!("\u{a7}aMakes: {}", ci::plain_name(&name(game, made)))), u32::MAX));
+                        lines.push((Text::literal(format!("\u{a7}7{}", ci::surface_work(kind))), u32::MAX));
+                    }
+                    (Some(made), ci::Kind::Anvil) => {
+                        let cost = game.station.as_ref().map_or(0, |s| s.anvil.cost);
+                        lines.push((Text::literal(format!("\u{a7}7{}", ci::plain_name(&name(game, made)))), u32::MAX));
+                        if cost > 0 {
+                            lines.push((Text::literal(format!("\u{a7}aEnchantment Cost: {cost}")), u32::MAX));
+                        }
                         lines.push((Text::literal(format!("\u{a7}7{}", ci::surface_work(kind))), u32::MAX));
                     }
                     (Some(_), ci::Kind::Grindstone) => {

@@ -138,7 +138,16 @@ fn cinematic_hands(game: &mut crate::game::Game<'_>, alpha: f64) -> ::core::ops:
             let block = game.items().get(&stack.item).is_some_and(|info| info.block.is_some());
             let size = if block { (s.r * 1.1).min(0.25) } else { (s.r * 1.45).min(0.36) } as f32;
             let state = game.resolve_item(&stack, DisplayContext::Fixed, None, 60 + s.slot as i32);
-            game.submit_item_world(&state, ci::item_matrix(fix(ci::spot_point(table, yaw, s)), yaw, block, size * presence.max(0.001), 0.0), item_light, &mut out);
+            // The enchanting table's item floats upright over the book, bobbing and turning.
+            let floating = kind == ci::Kind::Enchanting && s.slot == 0;
+            let matrix = if floating && !block {
+                ci::item_upright(fix(ci::spot_point(table, yaw, s) + glam::DVec3::Y * ci::bob(seconds)), yaw, 0.6 * presence.max(0.001), (seconds * 45.0) as f32)
+            } else if floating {
+                ci::item_matrix(fix(ci::spot_point(table, yaw, s) + glam::DVec3::Y * ci::bob(seconds)), yaw, block, size * presence.max(0.001), (seconds * 45.0) as f32)
+            } else {
+                ci::item_matrix(fix(ci::spot_point(table, yaw, s)), yaw, block, size * presence.max(0.001), 0.0)
+            };
+            game.submit_item_world(&state, matrix, item_light, &mut out);
         }
         if let Some(slot) = spot
             && kind != ci::Kind::Shelf

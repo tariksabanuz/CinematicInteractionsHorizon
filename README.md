@@ -19,7 +19,8 @@ Other stations work the same way, in the world instead of a window:
 
 - Furnace, smoker and blast furnace: the items lie in the openings; fuel below, things to smelt above.
 - Smithing table, cartography table, grindstone, brewing stand, loom: each input has its own spot on the block. The loom's patterns are on a board at the right once a banner and a dye lie there.
-- Enchanting table: the item floats over the book, lapis goes into the blue rune at the right, the three offers float over the table as runes (cost, lapis, the clue in the tooltip); touch one to enchant.
+- Enchanting table: a faint blue circle marks the lapis spot; lapis lies on it with its count. The item floats upright over the book, turning, and the three offers float over the table as the jar's turning purple rune circles (cost, a clue in the galactic alphabet, a blue star per lapis); touch one to enchant.
+- Anvil: the item lies on the anvil with its name floating above (and the cost in green), what goes into it lies on top; LMB on the result forges it.
 - Beacon: the powers float beside it with the pyramid level they need; the payment lies on the glass, a click on it lights the beacon.
 - Chiseled bookshelf: click a book to take it, click an empty place with a book to put it in.
 - Campfire and soul campfire: looking at one shows "[H] Sit by the fire". H sits you down by it; carried food goes on a free spot of the fire. Esc stands up.
@@ -35,6 +36,6 @@ A port of [Cinematic Interactions](https://www.curseforge.com/minecraft/mc-mods/
 
 ## Building
 
-`python3 check/build.py --test` type-checks the hooks against stand-ins for the Horizon signatures they use and runs the tests. `python3 tools/package.py` writes `target/cinematic_interactions-0.8.0.hnmod`.
+`python3 check/build.py --test` type-checks the hooks against stand-ins for the Horizon signatures they use and runs the tests. `python3 tools/package.py` writes `target/cinematic_interactions-0.9.0.hnmod`.
 
 MIT licence.

@@ -10,7 +10,7 @@ pub mod hud {
     use std::collections::HashMap;
     #[derive(Clone, Copy, Debug)] pub struct Rect { pub u0: f32, pub v0: f32, pub u1: f32, pub v1: f32 }
     pub struct Font;
-    impl Font { pub fn white(&self) -> Rect { Rect { u0: 0.0, v0: 0.0, u1: 1.0, v1: 1.0 } } pub fn width(&self, t: &str) -> f32 { t.chars().count() as f32 * 6.0 } }
+    impl Font { pub fn white(&self) -> Rect { Rect { u0: 0.0, v0: 0.0, u1: 1.0, v1: 1.0 } } pub fn width(&self, t: &str) -> f32 { t.chars().count() as f32 * 6.0 } pub fn width_text(&self, t: &crate::text::Text) -> f32 { 6.0 } }
     pub struct HudAtlas { pub sprites: HashMap<String, Rect>, pub font: Font }
     #[derive(Clone, Debug)] pub struct HudVertex;
     pub struct HudBatch { pub vertices: Vec<HudVertex>, pub scale: f32, pub width: f32, pub height: f32, pub fills: Vec<[f32; 4]> }
@@ -19,6 +19,8 @@ pub mod hud {
         pub fn fill(&mut self, atlas: &HudAtlas, x: f32, y: f32, w: f32, h: f32, color: u32) { self.fills.push([x, y, w, h]); self.vertices.extend([HudVertex, HudVertex, HudVertex, HudVertex]); }
         pub fn text(&mut self, atlas: &HudAtlas, text: &str, x: f32, y: f32, color: u32, shadow: bool) -> f32 { self.vertices.push(HudVertex); atlas.font.width(text) }
         pub fn text_width(atlas: &HudAtlas, text: &str) -> f32 { atlas.font.width(text) }
+        pub fn fill_quad(&mut self, atlas: &HudAtlas, corners: [[f32; 2]; 4], color: u32) { self.vertices.push(HudVertex); }
+        pub fn text_styled(&mut self, atlas: &HudAtlas, text: &crate::text::Text, x: f32, y: f32, color: u32, shadow: bool) -> f32 { self.vertices.push(HudVertex); 0.0 }
         pub fn sprite(&mut self, atlas: &HudAtlas, name: &str, x: f32, y: f32) {}
         pub fn sprite_scaled(&mut self, atlas: &HudAtlas, name: &str, x: f32, y: f32, w: f32, h: f32, color: u32) {}
         pub fn scale_since(&mut self, start: usize, cx: f32, cy: f32, sx: f32, sy: f32) {}
@@ -53,7 +55,8 @@ pub mod items {
 }
 pub mod text {
     #[derive(Clone, Debug)] pub struct Text;
-    impl Text { pub fn literal(s: impl Into<String>) -> Text { Text } }
+    impl Text { pub fn literal(s: impl Into<String>) -> Text { Text } pub fn styled(s: impl Into<String>, style: Style) -> Text { Text } }
+    #[derive(Clone, Debug, Default)] pub struct Style { pub color: Option<u32>, pub font: Option<String>, pub bold: Option<bool> }
 }
 pub mod item_tooltip { pub fn name_line(stack: &crate::items::ItemStack, translate: &dyn Fn(&str) -> Option<String>) -> String { String::new() } }
 pub mod item_model { #[derive(Clone, Copy)] pub enum DisplayContext { Fixed, Ground } }
@@ -128,7 +131,7 @@ pub mod game {
     pub struct Audio;
     impl Audio { pub fn play(&self, s: &str, at: Option<[f64; 3]>, v: f32, p: f32) {} }
     pub struct BookSettings { pub open: [bool; 4], pub filtering: [bool; 4] }
-    pub struct Level { pub recipe_book: BookSettings }
+    pub struct Level { pub recipe_book: BookSettings, pub xp_seed: i32 }
     pub use crate::recipe_book::{Book, Entry};
     pub struct RButton { pub entries: Vec<(usize, bool)> }
     pub struct View { pub buttons: Vec<RButton> }
@@ -237,7 +240,8 @@ pub mod game {
         use crate::hud::{HudBatch, rgba};
         use crate::items::ItemStack;
         #[derive(Clone, Default, Debug)] pub struct EnchantOffers { pub costs: [i32; 3], pub clues: [Option<(std::sync::Arc<str>, u32)>; 3] }
-        pub struct Station { pub(crate) pos: [i32; 3], pub(crate) inputs: Vec<Option<ItemStack>>, pub(crate) result: Option<ItemStack>, pub(crate) offers: EnchantOffers, pub(crate) beacon: [Option<usize>; 2], pub(crate) beacon_levels: Option<i32>, pub(crate) loom: LoomState }
+        pub struct Station { pub(crate) pos: [i32; 3], pub(crate) inputs: Vec<Option<ItemStack>>, pub(crate) result: Option<ItemStack>, pub(crate) offers: EnchantOffers, pub(crate) beacon: [Option<usize>; 2], pub(crate) beacon_levels: Option<i32>, pub(crate) loom: LoomState, pub(crate) anvil: AnvilState, pub(crate) name: String }
+        pub struct AnvilState { pub cost: i32 }
         pub struct LoomState { pub(crate) display: bool }
         //STATION_CLICK//
     }
