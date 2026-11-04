@@ -8,6 +8,12 @@ fn cinematic_campfire_tick(game: &mut crate::game::Game<'_>) {
         let input = if shift { Input::QuickMove } else { Input::Pickup };
         game.menu_click(Some(650), 0, input);
     }
+    if let Some(n) = ci::take_move_to() {
+        let aim = game.forced_hit.take();
+        game.forced_hit = Some(crate::game::Hit { pos: n, face: [0, 1, 0], point: [f64::from(n[0]) + 0.5, f64::from(n[1]) + 1.0, f64::from(n[2]) + 0.5] });
+        game.remote_use_block(horizon_client::first_person::Hand::Main);
+        game.forced_hit = aim;
+    }
     let Some((t, at, with_carried)) = ci::take_place() else {
         return;
     };

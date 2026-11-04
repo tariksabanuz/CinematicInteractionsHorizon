@@ -11,10 +11,8 @@ fn cinematic_press(game: &mut crate::game::Game<'_>, right: bool) -> ::core::ops
         ci::set_neighbour(None);
         ci::stand_up();
         game.close_container();
-        let aim = game.forced_hit.take();
-        game.forced_hit = Some(crate::game::Hit { pos: n, face: [0, 1, 0], point: [f64::from(n[0]) + 0.5, f64::from(n[1]) + 1.0, f64::from(n[2]) + 0.5] });
-        game.remote_use_block(horizon_client::first_person::Hand::Main);
-        game.forced_hit = aim;
+        // The use itself runs in the next tick (the game's use of a block is private to its module).
+        ci::set_move_to(Some(n));
         game.inv_clicks.skip_release();
         return ::core::ops::ControlFlow::Break(());
     }

@@ -164,6 +164,7 @@ struct State {
     place: Option<([i32; 3], Option<([f64; 3], [i32; 3])>, bool)>,
     /// The scene's own use of a block is going on (not a click that opens a scene).
     own_use: bool,
+    move_to: Option<[i32; 3]>,
     /// The station beside the one in the scene that the cursor is over (the jar's "move over").
     neighbour: Option<[i32; 3]>,
     /// The last ritual: the enchanting's light, the beacon's, the anvil's strike.
@@ -222,6 +223,7 @@ static STATE: Mutex<State> = Mutex::new(State {
     campfire_spots: &[],
     place: None,
     own_use: false,
+    move_to: None,
     neighbour: None,
     burst: None,
     forge: None,
@@ -2617,6 +2619,14 @@ pub fn request_place(t: [i32; 3]) {
 /// The scene's own use of a block: the use hook lets it through to the game.
 pub fn set_own_use(on: bool) {
     state().own_use = on;
+}
+
+pub fn set_move_to(pos: Option<[i32; 3]>) {
+    state().move_to = pos;
+}
+
+pub fn take_move_to() -> Option<[i32; 3]> {
+    state().move_to.take()
 }
 
 pub fn own_use() -> bool {
