@@ -221,6 +221,10 @@ fn cinematic_hands(game: &mut crate::game::Game<'_>, alpha: f64) -> ::core::ops:
             }
         }
     }
+    // The anvil's hammer in the swing.
+    if surface && ci::kind() == ci::Kind::Anvil {
+        quads.extend(ci::hammer_quads(table, yaw));
+    }
     // A carried stack is in the hand, unless the cursor is over the inventory panel.
     if let Some(stack) = game.carried.clone()
         && !over_panel

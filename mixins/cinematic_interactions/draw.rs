@@ -6,6 +6,50 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
     // FurnaceStation.tooltip and renderScreen: the panel at the top, the furnace's hint at the bottom
     // and, over a zone, its name in gold, then what it holds (or that it is empty), how far the
     // smelting is, how long the fire burns; with a stack in the hand, whether the zone takes it.
+    // The station beside this one under the cursor: its outline and "Name  RMB — move over".
+    fn draw_neighbour(game: &mut crate::game::Game<'_>, batch: &mut HudBatch, busy: bool) {
+        use horizon_client::native_cinematic_interactions as ci;
+        use horizon_client::hud::rgba;
+        let (x, y) = game.cursor;
+        let (t, yaw) = ci::table();
+        let mut found: Option<([i32; 3], String, Vec<(f32, f32)>)> = None;
+        if !busy && ci::phase() == ci::Phase::Inside && !ci::on_panel(batch.width, x, y) {
+            for n in ci::neighbours(t, yaw) {
+                let name = game.block_name(n).to_string();
+                let Some(kind) = ci::kind_of(&name, false) else {
+                    continue;
+                };
+                if !ci::moves_to(kind) {
+                    continue;
+                }
+                let pts: Vec<(f32, f32)> = ci::block_corners(n).iter().filter_map(|c| ci::screen_of(*c, batch.width, batch.height)).collect();
+                if pts.len() < 8 {
+                    continue;
+                }
+                let (x0, x1) = pts.iter().fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p.0), b.max(p.0)));
+                let (y0, y1) = pts.iter().fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p.1), b.max(p.1)));
+                if x >= x0 && x <= x1 && y >= y0 && y <= y1 {
+                    found = Some((n, name, pts));
+                    break;
+                }
+            }
+        }
+        ci::set_neighbour(found.as_ref().map(|f| f.0));
+        let Some((_, name, pts)) = found else {
+            return;
+        };
+        let atlas = &game.gui.atlas;
+        for (a, b) in ci::BLOCK_EDGES {
+            ci::line(batch, atlas, pts[a], pts[b], 0.75, rgba(255, 255, 255, 200));
+        }
+        let title = game.translate(&format!("block.{}", name.replace(':', ".")), &name);
+        let label = format!("{title}  \u{a7}7{}", ci::MOVE_OVER);
+        let w = HudBatch::text_width(atlas, &label);
+        let top = pts.iter().fold((0.0f32, f32::MAX), |(sx, sy), p| (sx + p.0 / 8.0, sy.min(p.1)));
+        let (lx, ly) = ((top.0 - w * 0.5).clamp(2.0, batch.width - w - 2.0), (top.1 - 14.0).max(2.0));
+        batch.fill(atlas, lx - 3.0, ly - 2.0, w + 6.0, 12.0, rgba(16, 12, 20, 200));
+        batch.text(atlas, &label, lx, ly, rgba(255, 255, 255, 255), true);
+    }
     fn draw_furnace(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) {
         use horizon_client::native_cinematic_interactions as ci;
         use horizon_client::text::Text;
@@ -23,6 +67,8 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
         if ci::config().hints {
             ci::draw_hint_line(batch, &game.gui.atlas, ci::station_hint(kind));
         }
+        let busy = ci::furnace_hover(ci::ndc((x, y), batch.width, batch.height)).is_some();
+        draw_neighbour(game, batch, busy);
         if ci::on_panel(batch.width, x, y) {
             game.draw_carried(batch);
             game.draw_slot_tooltip(batch);
@@ -202,6 +248,11 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
                 _ => 0,
             });
             let index = |e: &str| ["speed", "haste", "resistance", "jump_boost", "strength", "regeneration"].iter().position(|n| *n == e);
+            for (q, a) in ci::beacon_socket(pos) {
+                if let Some(sq) = ci::screen_quad(&q, batch.width, batch.height) {
+                    ci::fill_screen_quad(batch, &game.gui.atlas, sq, [235, 250, 255], a * 0.8);
+                }
+            }
             let hovered = if over { ci::power_at(x, y, batch.width, batch.height) } else { None };
             for (k, p) in ci::POWERS.iter().enumerate() {
                 // The upgrade shows the chosen primary, at level II.
@@ -212,16 +263,18 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
                 };
                 let active = if p.upgrade || !p.primary { levels >= 4 } else { p.level <= levels };
                 let chosen = if p.primary { sel[0] == e } else if p.upgrade { sel[1] == sel[0] && sel[0].is_some() } else { sel[1] == e && sel[1] != sel[0] };
-                let r = ci::RUNE_RADIUS * if hovered == Some(k) { 1.15 } else { 1.0 };
-                let ring = if chosen { rgba(255, 220, 110, 240) } else if active { rgba(150, 210, 255, 200) } else { rgba(70, 70, 76, 200) };
-                ci::disc(batch, &game.gui.atlas, sx, sy, r + 1.5, ring);
-                ci::disc(batch, &game.gui.atlas, sx, sy, r, if active { rgba(20, 34, 52, 225) } else { rgba(26, 26, 30, 225) });
-                let tint = if active { u32::MAX } else { rgba(110, 110, 110, 255) };
+                // BeaconStation.drawPower: a dim glow, the effect's ring (brighter when chosen or
+                // hovered), the effect's sprite, and the pyramid level under it.
+                let r = ci::CIRCLE_RADIUS * if hovered == Some(k) { 1.08 } else { 1.0 };
+                let rgb = ci::effect_rgb(effect);
+                let lit = if chosen { 1.0 } else if hovered == Some(k) { 0.85 } else if active { 0.6 } else { 0.35 };
+                ci::glow(batch, &game.gui.atlas, sx, sy, r * 1.1, [18, 20, 24], 0.35);
+                ci::ring(batch, &game.gui.atlas, sx, sy, r, if active || chosen { rgb } else { [150, 150, 160] }, lit);
+                let tint = if active { u32::MAX } else { rgba(90, 90, 96, 255) };
                 batch.sprite_scaled(&game.gui.atlas, &format!("mob_effect/{effect}"), sx - 9.0, sy - 9.0, 18.0, 18.0, tint);
-                // The pyramid level the power needs, under it (the upgrade: level II of the primary).
                 let label = if p.upgrade { "II" } else { ci::roman(p.level as u32) };
                 let lw = HudBatch::text_width(&game.gui.atlas, label);
-                batch.text(&game.gui.atlas, label, sx - lw * 0.5, sy + r + 3.0, if active { rgba(220, 220, 200, 255) } else { rgba(120, 120, 120, 255) }, true);
+                batch.text(&game.gui.atlas, label, sx - lw * 0.5, sy + r + 2.0, if chosen { rgba(0xFF, 0xF2, 0xC0, 255) } else { rgba(0x9A, 0x9A, 0xA6, 255) }, false);
                 if hovered == Some(k) {
                     let name = game.translate(&format!("effect.minecraft.{effect}"), effect);
                     let mut lines = vec![(Text::literal(format!("\u{a7}f{name}{}", if p.upgrade { " II" } else { "" })), u32::MAX)];
@@ -270,6 +323,33 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
                 ci::scaled_text(batch, atlas, text, ox + 58.0, oy + 30.0, 0.5, rgba(200, 190, 170, 255));
             }
         }
+        // The rituals' light: the enchanting over the item, the beacon over its core, the anvil's
+        // sparks where the hammer hits.
+        if let Some(age) = ci::burst_age(kind) {
+            let atlas = &game.gui.atlas;
+            match kind {
+                ci::Kind::Enchanting => {
+                    if let Some((sx, sy)) = ci::screen_of(ci::spot_point(t, yaw, &ci::ENCHANTING_SPOTS[0]), batch.width, batch.height) {
+                        ci::draw_burst(batch, atlas, sx, sy, age, [214, 120, 255], true);
+                    }
+                }
+                ci::Kind::Beacon => {
+                    let primary = game.station.as_ref().and_then(|s| s.beacon[0]);
+                    let rgb = primary.map_or([230, 250, 255], |e| ci::effect_rgb(["speed", "haste", "resistance", "jump_boost", "strength", "regeneration"][e]));
+                    if let Some((sx, sy)) = ci::screen_of(ci::top_center(t) - glam::DVec3::Y * 0.12, batch.width, batch.height) {
+                        ci::draw_burst(batch, atlas, sx, sy, age, rgb, true);
+                    }
+                }
+                ci::Kind::Anvil if age >= ci::FORGE_HIT => {
+                    if let Some((sx, sy)) = ci::screen_of(ci::spot_point(t, yaw, &ci::ANVIL_SPOTS[0]), batch.width, batch.height) {
+                        ci::draw_burst(batch, atlas, sx, sy, (age - ci::FORGE_HIT) * 1.6, [255, 170, 60], false);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let busy = extra.is_some() || ci::surface_hover(ci::ndc((x, y), batch.width, batch.height)).is_some();
+        draw_neighbour(game, batch, busy);
         if let Some(lines) = extra {
             game.draw_tooltip_lines(batch, &lines, x, y);
             return;
@@ -453,6 +533,8 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
     }
     let seconds = game.started.elapsed().as_secs_f64();
     let over_book = ci::book_open() && ci::book_hit(x, y, ci::selected().is_some()).is_some();
+    let busy = over_book || ci::book_open() || ci::hover(ci::ndc((x, y), batch.width, batch.height), seconds).is_some();
+    draw_neighbour(game, batch, busy);
     match ci::hover(ci::ndc((x, y), batch.width, batch.height), seconds) {
         _ if over_book || ci::on_panel(batch.width, x, y) => {
             if !over_book {

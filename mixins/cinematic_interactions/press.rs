@@ -2,6 +2,22 @@
 fn cinematic_press(game: &mut crate::game::Game<'_>, right: bool) -> ::core::ops::ControlFlow<()> {
     use horizon_client::native_cinematic_interactions as ci;
     let kind = ci::kind();
+    // RMB on the station beside this one: the scene moves over to it (the jar's "move over"): this
+    // one closes and the other is used as a click on it would.
+    if right
+        && ci::controls()
+        && let Some(n) = ci::neighbour()
+    {
+        ci::set_neighbour(None);
+        ci::stand_up();
+        game.close_container();
+        let aim = game.forced_hit.take();
+        game.forced_hit = Some(crate::game::Hit { pos: n, face: [0, 1, 0], point: [f64::from(n[0]) + 0.5, f64::from(n[1]) + 1.0, f64::from(n[2]) + 0.5] });
+        game.remote_use_block(horizon_client::first_person::Hand::Main);
+        game.forced_hit = aim;
+        game.inv_clicks.skip_release();
+        return ::core::ops::ControlFlow::Break(());
+    }
     if ci::controls() && ci::is_surface(kind)
         && let Some(size) = game.renderer.as_ref().map(|r| [r.config.width, r.config.height])
     {
@@ -64,6 +80,7 @@ fn cinematic_press(game: &mut crate::game::Game<'_>, right: bool) -> ::core::ops
             let paid = game.station.as_ref().is_some_and(|s| s.inputs.first().is_some_and(|i| i.is_some()) && s.beacon[0].is_some());
             if !right && kind == ci::Kind::Beacon && paid && game.carried.is_none() && ci::surface_hover(ci::ndc((x, y), batch.width, batch.height)) == Some(0) {
                 game.beacon_click(ci::BEACON_CONFIRM);
+                ci::start_burst(kind);
                 game.inv_clicks.skip_release();
                 return ::core::ops::ControlFlow::Break(());
             }

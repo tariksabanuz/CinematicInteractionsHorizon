@@ -17,6 +17,7 @@ fn cinematic_station_click(game: &mut crate::game::Game<'_>, right: bool) -> ::c
         && let Some(i) = ci::rune_at(x, y, batch.width, batch.height)
     {
         game.click_enchant(i);
+        ci::start_burst(kind);
         return ::core::ops::ControlFlow::Break(true);
     }
     if !right && kind == ci::Kind::Beacon {
@@ -27,12 +28,20 @@ fn cinematic_station_click(game: &mut crate::game::Game<'_>, right: bool) -> ::c
         let paid = game.station.as_ref().is_some_and(|s| s.inputs.first().is_some_and(|i| i.is_some()) && s.beacon[0].is_some());
         if paid && game.carried.is_none() && ci::surface_hover(ci::ndc((x, y), batch.width, batch.height)) == Some(0) {
             game.beacon_click(ci::BEACON_CONFIRM);
+            ci::start_burst(kind);
             return ::core::ops::ControlFlow::Break(true);
         }
     }
     let Some(slot) = game.slot_at(&batch, x, y) else {
         return ::core::ops::ControlFlow::Break(true);
     };
+    // The anvil: the hammer swings first, the result is taken when it hits (EnchantFx's tick).
+    if kind == ci::Kind::Anvil && slot == 650 && !right {
+        if game.slot_view(650).is_some() && game.carried.is_none() {
+            ci::start_forge(game.has_shift_down());
+        }
+        return ::core::ops::ControlFlow::Break(true);
+    }
     let input = if game.has_shift_down() { horizon_client::menu::Input::QuickMove } else { horizon_client::menu::Input::Pickup };
     game.menu_click(Some(slot), i32::from(right), input);
     ::core::ops::ControlFlow::Break(true)

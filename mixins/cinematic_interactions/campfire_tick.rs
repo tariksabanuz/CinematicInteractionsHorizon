@@ -4,6 +4,10 @@
 fn cinematic_campfire_tick(game: &mut crate::game::Game<'_>) {
     use horizon_client::native_cinematic_interactions as ci;
     use horizon_client::menu::Input;
+    if let Some(shift) = ci::forge_due() {
+        let input = if shift { Input::QuickMove } else { Input::Pickup };
+        game.menu_click(Some(650), 0, input);
+    }
     let Some((t, at, with_carried)) = ci::take_place() else {
         return;
     };
@@ -19,7 +23,9 @@ fn cinematic_campfire_tick(game: &mut crate::game::Game<'_>) {
     let (point, face) = at.unwrap_or(([f64::from(t[0]) + 0.5, f64::from(t[1]) + 0.4375, f64::from(t[2]) + 0.5], [0, 1, 0]));
     let aim = game.forced_hit.take();
     game.forced_hit = Some(crate::game::Hit { pos: t, face, point });
+    ci::set_own_use(true);
     game.remote_use_block(horizon_client::first_person::Hand::Main);
+    ci::set_own_use(false);
     game.forced_hit = aim;
     if swap {
         game.menu_ops(&[(Some(slot), 0, Input::Pickup)]);

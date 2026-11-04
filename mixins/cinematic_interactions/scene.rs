@@ -162,6 +162,14 @@ struct State {
     campfire_spots: &'static [Spot],
     #[allow(clippy::type_complexity)]
     place: Option<([i32; 3], Option<([f64; 3], [i32; 3])>, bool)>,
+    /// The scene's own use of a block is going on (not a click that opens a scene).
+    own_use: bool,
+    /// The station beside the one in the scene that the cursor is over (the jar's "move over").
+    neighbour: Option<[i32; 3]>,
+    /// The last ritual: the enchanting's light, the beacon's, the anvil's strike.
+    burst: Option<(Kind, Instant)>,
+    /// The anvil's forge: when it began, Shift, and whether the strike has taken the result.
+    forge: Option<(Instant, bool, bool)>,
     /// The recipe panel's own filter ("Have materials"), and its list: a key of what it was built
     /// from, and (book entry, craftable) in the panel's order.
     book_filter: bool,
@@ -213,6 +221,10 @@ static STATE: Mutex<State> = Mutex::new(State {
     sitting: false,
     campfire_spots: &[],
     place: None,
+    own_use: false,
+    neighbour: None,
+    burst: None,
+    forge: None,
 });
 
 fn state() -> std::sync::MutexGuard<'static, State> {
@@ -544,7 +556,15 @@ pub fn camera(open: bool, fallback: Option<[i32; 3]>, live: Option<Pose>, player
         s.plain = false;
         None
     } else if inside {
-        (!s.plain).then_some(s.table)
+        // A click on another station while in the scene (moving over): the scene goes there.
+        let moved = s.clicked.filter(|c| c.0 != s.table && !c.2 && now.duration_since(c.1).as_secs_f32() < 3.0);
+        if let Some(c) = moved {
+            s.clicked = None;
+            s.kind = s.clicked_kind;
+            Some(c.0)
+        } else {
+            (!s.plain).then_some(s.table)
+        }
     } else if s.plain {
         None
     } else {
@@ -2268,6 +2288,17 @@ pub fn surface_rest(kind: Kind, side: usize, t: [i32; 3], yaw: f32) -> DVec3 {
         };
     }
     let f = if side == 0 { -1.0 } else { 1.0 };
+    let out = -forward(yaw);
+    if kind == Kind::Shelf {
+        // ShelfStation.rest: 0.3 in front of the face's middle, 0.6 to the side, 0.25 down.
+        let front = top_center(t) - DVec3::Y * 0.5 + out * 0.5;
+        return front + out * 0.3 + right(yaw) * (0.6 * f) - DVec3::Y * 0.25;
+    }
+    if kind == Kind::Beacon {
+        // BeaconStation.rest (0.86 out, 0.32 aside, 0.1 down from the top), with Hands.hidden: an
+        // idle hand is down out of the view, only the reaching one comes up.
+        return top_center(t) + out * 0.86 + right(yaw) * (0.32 * f) - DVec3::Y * 0.1 - DVec3::Y * 0.9 + out * 0.3;
+    }
     let aside = if kind == Kind::Cartography { 0.26 } else { 0.25 };
     let low = match kind {
         Kind::Brewing => -0.85,
@@ -2290,10 +2321,22 @@ pub fn step_surface_hands(spot: Option<usize>, now: Instant, seconds: f64) -> Op
     ];
     let mut targets = [surface_rest(kind, 0, t, yaw) + sway[0], surface_rest(kind, 1, t, yaw) + sway[1]];
     let mut reaching = None;
+    if kind == Kind::Anvil
+        && let Some((grip, _)) = hammer_pose(t, yaw)
+    {
+        targets[1] = grip;
+        return step_hands_to(targets, Some(1), now);
+    }
     if let Some(s) = spot.and_then(|slot| surface_spots(kind).iter().find(|s| s.slot == slot)) {
         let side = usize::from(s.x >= -0.1);
         let lift = if carrying { 0.075 } else { 0.045 };
-        targets[side] = spot_point(t, yaw, s) + DVec3::Y * (0.062 + lift * 0.5) - forward(yaw) * 0.075;
+        targets[side] = match kind {
+            // ShelfStation.handTarget: 0.07 out of the face, 0.04 below the place.
+            Kind::Shelf => spot_point(t, yaw, s) - forward(yaw) * 0.07 - DVec3::Y * 0.04,
+            // BeaconStation.handTarget: 0.07 towards the player, 0.04 down.
+            Kind::Beacon => spot_point(t, yaw, s) - forward(yaw) * 0.07 + DVec3::Y * 0.02,
+            _ => spot_point(t, yaw, s) + DVec3::Y * (0.062 + lift * 0.5) - forward(yaw) * 0.075,
+        };
         reaching = Some(side);
     }
     step_hands_to(targets, reaching, now)
@@ -2474,7 +2517,7 @@ pub fn power_at(x: f32, y: f32, w: f32, h: f32) -> Option<usize> {
     if kind != Kind::Beacon || !inside {
         return None;
     }
-    POWERS.iter().position(|p| screen_of(power_point(t, yaw, p), w, h).is_some_and(|(sx, sy)| (sx - x).hypot(sy - y) <= RUNE_RADIUS))
+    POWERS.iter().position(|p| screen_of(power_point(t, yaw, p), w, h).is_some_and(|(sx, sy)| (sx - x).hypot(sy - y) <= CIRCLE_RADIUS * 0.85))
 }
 
 /// A filled disc in rows, for a rune's or a power's background.
@@ -2571,6 +2614,15 @@ pub fn request_place(t: [i32; 3]) {
 
 /// Use the hand on a spot of a station with no menu (a bookshelf's place): `point` and `face` are
 /// where the use hits, `carried` whether the carried stack is to be used.
+/// The scene's own use of a block: the use hook lets it through to the game.
+pub fn set_own_use(on: bool) {
+    state().own_use = on;
+}
+
+pub fn own_use() -> bool {
+    state().own_use
+}
+
 pub fn request_use(t: [i32; 3], point: [f64; 3], face: [i32; 3], carried: bool) {
     state().place = Some((t, Some((point, face)), carried));
 }
@@ -2809,6 +2861,268 @@ pub fn lapis_socket(t: [i32; 3], yaw: f32) -> [DVec3; 4] {
     let c = spot_point(t, yaw, &ENCHANTING_SPOTS[1]) - DVec3::Y * 0.015;
     let (r, f, k) = (right(yaw), forward(yaw), 0.115);
     [c - r * k - f * k, c + r * k - f * k, c + r * k + f * k, c - r * k + f * k]
+}
+
+
+// ------------------------------------------------------------------ the beacon's rings
+
+/// The jar's ring.png across its radius (every second texel from the middle out, of 64): a soft
+/// edge inside, a bright line near the rim, a quick fade outside.
+const RING_PROFILE: [u8; 32] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 4, 8, 14, 21, 31, 42, 53, 74, 127, 227, 255, 255, 151, 62, 25];
+/// The jar's glow.png across its radius (every second texel, of 32).
+const GLOW_PROFILE: [u8; 16] = [242, 212, 182, 154, 129, 106, 85, 67, 51, 38, 26, 17, 10, 5, 1, 0];
+
+fn band(batch: &mut HudBatch, atlas: &HudAtlas, cx: f32, cy: f32, r0: f32, r1: f32, color: u32) {
+    const N: usize = 40;
+    for i in 0..N {
+        let (a0, a1) = (i as f32 / N as f32 * std::f32::consts::TAU, (i + 1) as f32 / N as f32 * std::f32::consts::TAU);
+        let p = |r: f32, a: f32| [cx + r * a.cos(), cy + r * a.sin()];
+        batch.fill_quad(atlas, [p(r0, a0), p(r1, a0), p(r1, a1), p(r0, a1)], color);
+    }
+}
+
+/// RING billboard on the screen (BeaconStation.drawPower), `r` its outer radius.
+pub fn ring(batch: &mut HudBatch, atlas: &HudAtlas, cx: f32, cy: f32, r: f32, rgb: [u8; 3], strength: f32) {
+    for (i, &a) in RING_PROFILE.iter().enumerate() {
+        if a == 0 {
+            continue;
+        }
+        let (r0, r1) = (((2 * i) as f32 - 1.0).max(0.0) / 64.0 * r, ((2 * i) as f32 + 1.0) / 64.0 * r);
+        band(batch, atlas, cx, cy, r0, r1, tint(rgb, f32::from(a) / 255.0 * strength));
+    }
+}
+
+/// GLOW billboard: a soft round haze, strongest in the middle.
+pub fn glow(batch: &mut HudBatch, atlas: &HudAtlas, cx: f32, cy: f32, r: f32, rgb: [u8; 3], strength: f32) {
+    for (i, &a) in GLOW_PROFILE.iter().enumerate() {
+        if a == 0 {
+            continue;
+        }
+        let (r0, r1) = ((2 * i) as f32 / 32.0 * r, (2 * i + 2) as f32 / 32.0 * r);
+        band(batch, atlas, cx, cy, r0, r1, tint(rgb, f32::from(a) / 255.0 * strength));
+    }
+}
+
+/// MobEffect colours of the beacon's powers, for their rings.
+pub fn effect_rgb(effect: &str) -> [u8; 3] {
+    match effect {
+        "speed" => [0x33, 0xEB, 0xFF],
+        "haste" => [0xD9, 0xC0, 0x43],
+        "resistance" => [0x91, 0x46, 0xF0],
+        "jump_boost" => [0xFD, 0xFF, 0x84],
+        "strength" => [0xFF, 0xC7, 0x00],
+        "regeneration" => [0xCD, 0x5C, 0xAB],
+        _ => [220, 220, 220],
+    }
+}
+
+/// The ring lying on the beacon's core (where the payment goes): world points of its bands, each
+/// a quad, for the screen to project.
+pub fn beacon_socket(t: [i32; 3]) -> Vec<([DVec3; 4], f32)> {
+    let c = top_center(t) - DVec3::Y * 0.12;
+    let r = 0.25;
+    let mut out = Vec::new();
+    const N: usize = 40;
+    for (k, &a) in RING_PROFILE.iter().enumerate() {
+        if a == 0 {
+            continue;
+        }
+        let (r0, r1) = (((2 * k) as f64 - 1.0).max(0.0) / 64.0 * r, ((2 * k) as f64 + 1.0) / 64.0 * r);
+        for i in 0..N {
+            let (a0, a1) = (i as f64 / N as f64 * std::f64::consts::TAU, (i + 1) as f64 / N as f64 * std::f64::consts::TAU);
+            let p = |rr: f64, aa: f64| c + DVec3::new(rr * aa.cos(), 0.0, rr * aa.sin());
+            out.push(([p(r0, a0), p(r1, a0), p(r1, a1), p(r0, a1)], f32::from(a) / 255.0));
+        }
+    }
+    out
+}
+
+/// Four projected corners as a screen quad, when all four are in front.
+pub fn screen_quad(q: &[DVec3; 4], w: f32, h: f32) -> Option<[[f32; 2]; 4]> {
+    let mut out = [[0.0; 2]; 4];
+    for (i, p) in q.iter().enumerate() {
+        let (x, y) = screen_of(*p, w, h)?;
+        out[i] = [x, y];
+    }
+    Some(out)
+}
+
+pub fn fill_screen_quad(batch: &mut HudBatch, atlas: &HudAtlas, q: [[f32; 2]; 4], rgb: [u8; 3], alpha: f32) {
+    batch.fill_quad(atlas, q, tint(rgb, alpha));
+}
+
+
+// ------------------------------------------------------------------ moving over to the next station
+
+/// The blocks right and left of the station in the scene (the jar's neighbouring stations).
+pub fn neighbours(t: [i32; 3], yaw: f32) -> [[i32; 3]; 2] {
+    let r = right(yaw);
+    let (dx, dz) = (r.x.round() as i32, r.z.round() as i32);
+    [[t[0] - dx, t[1], t[2] - dz], [t[0] + dx, t[1], t[2] + dz]]
+}
+
+/// A station the scene can move over to.
+pub fn moves_to(kind: Kind) -> bool {
+    kind == Kind::Table || is_furnace(kind) || (is_surface(kind) && kind != Kind::Campfire)
+}
+
+/// A block's eight corners: bit 0 is x, bit 1 y, bit 2 z.
+pub fn block_corners(p: [i32; 3]) -> [DVec3; 8] {
+    let mut out = [DVec3::ZERO; 8];
+    for (i, c) in out.iter_mut().enumerate() {
+        *c = DVec3::new(f64::from(p[0] + (i & 1) as i32), f64::from(p[1] + ((i >> 1) & 1) as i32), f64::from(p[2] + ((i >> 2) & 1) as i32));
+    }
+    out
+}
+
+/// The twelve edges of [`block_corners`].
+pub const BLOCK_EDGES: [(usize, usize); 12] = [(0, 1), (2, 3), (4, 5), (6, 7), (0, 2), (1, 3), (4, 6), (5, 7), (0, 4), (1, 5), (2, 6), (3, 7)];
+
+/// A line on the screen, `w` wide.
+pub fn line(batch: &mut HudBatch, atlas: &HudAtlas, a: (f32, f32), b: (f32, f32), w: f32, color: u32) {
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let l = dx.hypot(dy).max(0.001);
+    let (nx, ny) = (-dy / l * w * 0.5, dx / l * w * 0.5);
+    batch.fill_quad(atlas, [[a.0 + nx, a.1 + ny], [b.0 + nx, b.1 + ny], [b.0 - nx, b.1 - ny], [a.0 - nx, a.1 - ny]], color);
+}
+
+pub fn set_neighbour(n: Option<[i32; 3]>) {
+    state().neighbour = n;
+}
+
+pub fn neighbour() -> Option<[i32; 3]> {
+    let s = state();
+    if s.phase == Phase::Inside { s.neighbour } else { None }
+}
+
+pub const MOVE_OVER: &str = "RMB \u{2014} move over";
+
+
+// ------------------------------------------------------------------ rituals: the light and the hammer
+
+pub fn start_burst(kind: Kind) {
+    state().burst = Some((kind, Instant::now()));
+}
+
+/// Seconds since the station's last ritual, while it still shows.
+pub fn burst_age(kind: Kind) -> Option<f32> {
+    let s = state();
+    s.burst.filter(|b| b.0 == kind).map(|b| b.1.elapsed().as_secs_f32()).filter(|a| *a < 1.6)
+}
+
+fn spark_rand(i: u32, k: u32) -> f32 {
+    let mut x = i.wrapping_mul(747_796_405).wrapping_add(k.wrapping_mul(2_891_336_453)).wrapping_add(12345);
+    x ^= x >> 15;
+    x = x.wrapping_mul(2_246_822_519);
+    x ^= x >> 13;
+    (x & 0xFFFF) as f32 / 65535.0
+}
+
+/// The light of a ritual on the screen at (cx, cy): a beam up, a glow, a ring going out and
+/// sparks flying, fading over 1.4 s.
+pub fn draw_burst(batch: &mut HudBatch, atlas: &HudAtlas, cx: f32, cy: f32, age: f32, rgb: [u8; 3], beam: bool) {
+    let fade = (1.0 - age / 1.4).clamp(0.0, 1.0);
+    let rise = (age / 0.18).min(1.0);
+    if beam {
+        let w = 3.0 + 9.0 * fade;
+        let top = (cy - 400.0 * rise).max(-10.0);
+        for (k, a) in [(1.0f32, 0.35f32), (0.45, 0.6), (0.18, 0.9)] {
+            batch.fill_quad(atlas, [[cx - w * k, top], [cx + w * k, top], [cx + w * k * 1.6, cy], [cx - w * k * 1.6, cy]], tint(rgb, a * fade));
+        }
+    }
+    glow(batch, atlas, cx, cy, 14.0 + 30.0 * age.min(0.6), [255, 255, 255], 0.75 * fade);
+    glow(batch, atlas, cx, cy, 24.0 + 40.0 * age.min(0.8), rgb, 0.55 * fade);
+    ring(batch, atlas, cx, cy, 8.0 + 60.0 * (age / 0.9).min(1.0).sqrt(), rgb, fade);
+    for i in 0..28u32 {
+        let a = spark_rand(i, 1) * std::f32::consts::TAU;
+        let v = 30.0 + 70.0 * spark_rand(i, 2);
+        let t = age;
+        let (sx, sy) = (cx + a.cos() * v * t, cy + a.sin() * v * t * 0.6 - 40.0 * t + 45.0 * t * t);
+        let c = match i % 3 {
+            0 => rgb,
+            1 => [255, 255, 255],
+            _ => [140, 230, 255],
+        };
+        let size = 1.0 + spark_rand(i, 3);
+        batch.fill(atlas, sx - size * 0.5, sy - size * 0.5, size, size, tint(c, fade));
+    }
+}
+
+/// When the hammer hits the item (s) and when the swing is over.
+pub const FORGE_HIT: f32 = 0.5;
+pub const FORGE_TIME: f32 = 0.95;
+
+/// LMB on the anvil's result: the hammer swings, and the result is taken when it hits.
+pub fn start_forge(shift: bool) {
+    let mut s = state();
+    if s.forge.is_some_and(|f| f.0.elapsed().as_secs_f32() < FORGE_TIME) {
+        return;
+    }
+    let now = Instant::now();
+    s.forge = Some((now, shift, false));
+    s.burst = Some((Kind::Anvil, now));
+}
+
+/// The strike has come: take the result now (with Shift or not), once.
+pub fn forge_due() -> Option<bool> {
+    let mut s = state();
+    let f = s.forge.as_mut()?;
+    if f.2 || f.0.elapsed().as_secs_f32() < FORGE_HIT {
+        return None;
+    }
+    f.2 = true;
+    Some(f.1)
+}
+
+pub fn forging() -> bool {
+    state().forge.is_some_and(|f| f.0.elapsed().as_secs_f32() < FORGE_TIME)
+}
+
+/// The hammer in the swing: the grip and the handle's angle from straight up, towards the item
+/// (raised to the right, down on the item at the strike, a little bounce after).
+pub fn hammer_pose(t: [i32; 3], yaw: f32) -> Option<(DVec3, f64)> {
+    let age = state().forge.map(|f| f.0.elapsed().as_secs_f32())?;
+    if age >= FORGE_TIME {
+        return None;
+    }
+    let item = spot_point(t, yaw, &ANVIL_SPOTS[0]);
+    let grip = item + right(yaw) * 0.46 - forward(yaw) * 0.08 + DVec3::Y * 0.06;
+    let raise = window(age, 0.0, 0.32);
+    let strike = window(age, 0.36, FORGE_HIT);
+    let back = window(age, 0.62, FORGE_TIME);
+    let angle = -25.0 * f64::from(ease(raise)) + 113.0 * f64::from(strike * strike) - 50.0 * f64::from(ease(back));
+    let lift = DVec3::Y * (0.12 * f64::from(ease(raise)) * (1.0 - f64::from(strike)));
+    Some((grip + lift, angle.to_radians()))
+}
+
+/// The jar's hammer (HammerModel, from hammer.json): handle, head, pommel and collar as boxes, in
+/// the colours of their textures, at the swing's pose; quads with their shaded colour.
+pub fn hammer_quads(t: [i32; 3], yaw: f32) -> Vec<([DVec3; 4], u32)> {
+    let Some((grip, angle)) = hammer_pose(t, yaw) else {
+        return Vec::new();
+    };
+    // Model units (1/16) to the world: the hammer is about 0.5 long.
+    let k = 0.5 / 18.0;
+    let (r, f) = (right(yaw), forward(yaw));
+    // The handle leans from straight up towards the item (the left) by `angle`.
+    let up = DVec3::Y * angle.cos() - r * angle.sin();
+    let side = r * angle.cos() + DVec3::Y * angle.sin();
+    let at = |x: f64, y: f64, z: f64| grip + side * ((x - 8.0) * k) + up * ((y - 1.0) * k) + f * ((z - 8.0) * k);
+    let boxes: [([f64; 3], [f64; 3], [u8; 3]); 4] = [
+        ([7.125, 1.0, 7.125], [8.875, 11.0, 8.875], [118, 84, 54]),
+        ([2.0, 11.0, 4.0], [14.0, 18.0, 12.0], [64, 62, 66]),
+        ([7.0, 0.5, 7.0], [9.0, 2.0, 9.0], [150, 150, 142]),
+        ([7.0, 10.0, 7.0], [9.0, 11.0, 9.0], [134, 153, 148]),
+    ];
+    let mut out = Vec::new();
+    for (a, b, rgb) in boxes {
+        let c = |i: usize| at(if i & 1 == 0 { a[0] } else { b[0] }, if i & 2 == 0 { a[1] } else { b[1] }, if i & 4 == 0 { a[2] } else { b[2] });
+        for (face, shade) in [([0, 1, 3, 2], 0.8), ([4, 5, 7, 6], 0.8), ([0, 1, 5, 4], 0.5), ([2, 3, 7, 6], 1.0), ([0, 2, 6, 4], 0.6), ([1, 3, 7, 5], 0.6)] {
+            let col = u32::from_le_bytes([(f64::from(rgb[0]) * shade) as u8, (f64::from(rgb[1]) * shade) as u8, (f64::from(rgb[2]) * shade) as u8, 255]);
+            out.push(([c(face[0]), c(face[1]), c(face[2]), c(face[3])], col));
+        }
+    }
+    out
 }
 
 

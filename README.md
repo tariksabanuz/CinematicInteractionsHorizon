@@ -19,11 +19,12 @@ Other stations work the same way, in the world instead of a window:
 
 - Furnace, smoker and blast furnace: the items lie in the openings; fuel below, things to smelt above.
 - Smithing table, cartography table, grindstone, brewing stand, loom: each input has its own spot on the block. The loom's patterns are on a board at the right once a banner and a dye lie there.
-- Enchanting table: a faint blue circle marks the lapis spot; lapis lies on it with its count. The item floats upright over the book, turning, and the three offers float over the table as the jar's turning purple rune circles (cost, a clue in the galactic alphabet, a blue star per lapis); touch one to enchant.
-- Anvil: the item lies on the anvil with its name floating above (and the cost in green), what goes into it lies on top; LMB on the result forges it.
-- Beacon: the powers float beside it with the pyramid level they need; the payment lies on the glass, a click on it lights the beacon.
+- Enchanting table: a faint blue circle marks the lapis spot; lapis lies on it with its count. The item floats upright over the book, turning, and the three offers float over the table as the jar's turning purple rune circles (cost, a clue in the galactic alphabet, a blue star per lapis); touch one to enchant, and a beam of light, a ring and sparks rise from the item.
+- Anvil: the item lies on the anvil with its name floating above (and the cost in green), what goes into it lies on top; LMB on the result swings the jar's hammer down on it; the result is yours when it hits, with sparks.
+- Beacon: the powers float beside it in rings of their effect's colour, with the pyramid level they need; a ring lies on the core, the payment on the glass, and a click on it lights the beacon with a beam. The idle hands stay out of the view.
 - Chiseled bookshelf: click a book to take it, click an empty place with a book to put it in.
 - Campfire and soul campfire: looking at one shows "[H] Sit by the fire". H sits you down by it; carried food goes on a free spot of the fire. Esc stands up.
+- Next to another station: the cursor on it outlines it with "Name  RMB — move over", and RMB moves the scene over to it.
 - A crafting table keeps what you leave on it (in single player and on a world you host): the items lie on its top in the world and are back in the grid when you open it. Breaking the table drops them.
 
 Options > Mods > Cinematic Interactions turns the mod on and off. It also has settings for the cinematic bars, the control hints and the camera speed (Slow, Normal, Fast).
@@ -36,6 +37,6 @@ A port of [Cinematic Interactions](https://www.curseforge.com/minecraft/mc-mods/
 
 ## Building
 
-`python3 check/build.py --test` type-checks the hooks against stand-ins for the Horizon signatures they use and runs the tests. `python3 tools/package.py` writes `target/cinematic_interactions-0.9.0.hnmod`.
+`python3 check/build.py --test` type-checks the hooks against stand-ins for the Horizon signatures they use and runs the tests. `python3 tools/package.py` writes `target/cinematic_interactions-0.10.0.hnmod`.
 
 MIT licence.
