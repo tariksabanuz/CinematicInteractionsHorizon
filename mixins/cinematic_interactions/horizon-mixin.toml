@@ -72,7 +72,6 @@ kind = "HEAD"
 cancellable = true
 target = "horizon_client::game::Game<'_>::clicked_outside"
 helper = "outside.rs"
-bindings = [{ name = "batch", ty = "&HudBatch", value = "batch" }]
 
 # The book button and the recipe panel take their clicks.
 [[injection]]
