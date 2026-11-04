@@ -231,7 +231,7 @@ fn fov_fix_is_nothing_at_the_same_fov() {
 
 #[test]
 fn settings_round_trip() {
-    let c = ci::Config { bars: false, hints: true, speed: 2 };
+    let c = ci::Config { bars: false, hints: true, speed: 2, off: 5, zoom: 120, developer: true, ..ci::DEFAULT };
     assert_eq!(ci::parse(&ci::to_text(&c)), c);
     ci::set_config(ci::DEFAULT);
     assert_eq!(ci::setting_labels()[2], "Camera speed: Normal");

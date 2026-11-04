@@ -14,7 +14,7 @@ fn cinematic_hud(game: &mut crate::game::Game<'_>, size: [u32; 2]) -> ::core::op
     game.ui.hide_gui = hide;
     ci::leave(4);
     // Looking at a campfire within reach: "[H] Sit by the fire" under the crosshair.
-    if !ci::shown() && game.screen == crate::game::Screen::Playing && !game.ui.hide_gui && !game.spectator()
+    if !ci::shown() && ci::config().invite && game.screen == crate::game::Screen::Playing && !game.ui.hide_gui && !game.spectator()
         && let Some(hit) = game.pick()
         && ci::is_campfire(&game.block_name(hit.pos))
         && game.player.as_ref().is_some_and(|p| ci::reach(glam::DVec3::new(p.position.x, p.position.y, p.position.z), hit.pos).is_none())

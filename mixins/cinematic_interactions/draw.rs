@@ -340,9 +340,14 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
                         ci::draw_burst(batch, atlas, sx, sy, age, rgb, true);
                     }
                 }
-                ci::Kind::Anvil if age >= ci::FORGE_HIT => {
-                    if let Some((sx, sy)) = ci::screen_of(ci::spot_point(t, yaw, &ci::ANVIL_SPOTS[0]), batch.width, batch.height) {
-                        ci::draw_burst(batch, atlas, sx, sy, (age - ci::FORGE_HIT) * 1.6, [255, 170, 60], false);
+                ci::Kind::Anvil | ci::Kind::Grindstone => {
+                    let spot = if kind == ci::Kind::Anvil { &ci::ANVIL_SPOTS[0] } else { &ci::GRINDSTONE_SPOTS[0] };
+                    if let Some(a) = ci::forge_spark_age()
+                        && let Some((sx, sy)) = ci::screen_of(ci::spot_point(t, yaw, spot), batch.width, batch.height)
+                    {
+                        // The anvil: orange sparks at each strike; the wheel: orange and pink.
+                        let rgb = if kind == ci::Kind::Anvil || (a * 10.0) as u32 % 2 == 0 { [255, 170, 60] } else { [255, 150, 230] };
+                        ci::draw_burst(batch, atlas, sx, sy, a * 2.2, rgb, false);
                     }
                 }
                 _ => {}
@@ -377,6 +382,7 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
             if full {
                 lines.push((Text::literal(book.as_ref().map_or_else(|| "Book".to_owned(), |b| name(game, b))), u32::MAX));
                 lines.push((Text::literal("\u{a7}6LMB \u{2014} take"), u32::MAX));
+                lines.push((Text::literal("\u{a7}7Shift+LMB \u{2014} into the inventory"), u32::MAX));
             } else if let Some(c) = game.carried.as_ref() {
                 if ci::is_book(&c.item) {
                     lines.push((Text::literal(name(game, c)), u32::MAX));

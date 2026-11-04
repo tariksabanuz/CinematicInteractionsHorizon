@@ -49,8 +49,15 @@ fn cinematic_press(game: &mut crate::game::Game<'_>, right: bool) -> ::core::ops
                     let book = game.carried.as_ref().is_some_and(|c| ci::is_book(&c.item));
                     if full {
                         // An empty hand takes: a held book would go in an empty place, not here.
+                        let item = match game.world.block_entities.get(&(t[0], t[1], t[2])) {
+                            Some(horizon_client::containers::BlockEntity::ChiseledBookshelf(b)) => b.items.get(i).cloned().flatten().map(|s| s.item.to_string()),
+                            _ => None,
+                        };
+                        ci::start_slide(i, false, item.as_deref().unwrap_or("minecraft:book"));
                         ci::request_use(t, point, face, false);
                     } else if book {
+                        let item = game.carried.as_ref().map(|c| c.item.to_string()).unwrap_or_default();
+                        ci::start_slide(i, true, &item);
                         ci::request_use(t, point, face, true);
                     }
                 }

@@ -17,7 +17,7 @@ use std::time::Instant;
 
 pub const ID: &str = "cinematic_interactions";
 pub const NAME: &str = "Cinematic Interactions";
-pub const VERSION: &str = "0.8.0";
+pub const VERSION: &str = "0.11.0";
 pub const DESCRIPTION: &str = "By tariksabanuz. Right-click a crafting table: you walk up, the camera leans over it, your arms reach \
 for the grid and the items lie on the table, and stay there when you leave. Furnaces, smithing and cartography tables, \
 grindstones, brewing stands, looms, enchanting tables, beacons and chiseled bookshelves are worked in the world too; \
@@ -30,16 +30,93 @@ pub type Pose = (DVec3, f32, f32);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Config {
-    /// The black bars while the camera moves.
+    /// The black bars while the camera moves (Letterbox bars).
     pub bars: bool,
     /// The control hints at the bottom of the screen.
     pub hints: bool,
-    /// The camera's speed: 0 slow, 1 normal, 2 fast.
+    /// The camera's speed in the Mods page: 0 slow, 1 normal, 2 fast.
     pub speed: u8,
+    /// A station out of reach says why (else it is silent).
+    pub reach_why: bool,
+    /// The "[H] Sit by the fire" plate.
+    pub invite: bool,
+    /// The orbit view key: hold (else toggle).
+    pub orbit_hold: bool,
+    /// The arms at work: stretched (else relaxed).
+    pub arms_stretched: bool,
+    /// Stations turned off (bits of [`STATIONS`]): they open their normal screen.
+    pub off: u32,
+    /// The camera preset: 0 balanced, 1 cinematic, 2 snappy, 3 custom.
+    pub preset: u8,
+    pub reduce_motion: bool,
+    /// The way in: a quick return within the window (else always the full glide).
+    pub quick_return: bool,
+    /// Percent of the normal approach and leaving speed.
+    pub approach: u16,
+    pub leaving: u16,
+    /// Seconds after leaving in which coming back is quick.
+    pub window: u16,
+    /// Percent of the camera's lean and of the scene's zoom.
+    pub lean: u16,
+    pub zoom: u16,
+    pub breathing: bool,
+    pub shake: bool,
+    pub flashes: bool,
+    pub developer: bool,
 }
 
-pub const DEFAULT: Config = Config { bars: true, hints: true, speed: 1 };
+pub const DEFAULT: Config = Config {
+    bars: true,
+    hints: true,
+    speed: 1,
+    reach_why: true,
+    invite: true,
+    orbit_hold: true,
+    arms_stretched: true,
+    off: 0,
+    preset: 0,
+    reduce_motion: false,
+    quick_return: true,
+    approach: 100,
+    leaving: 100,
+    window: 12,
+    lean: 100,
+    zoom: 100,
+    breathing: true,
+    shake: true,
+    flashes: true,
+    developer: false,
+};
 const SPEEDS: [&str; 3] = ["Slow", "Normal", "Fast"];
+
+/// The stations of the settings' Stations page: kind, name, icon item and group.
+pub const STATIONS: [(Kind, &str, &str, u8); 18] = [
+    (Kind::Table, "Crafting Table", "minecraft:crafting_table", 0),
+    (Kind::Crafter, "Crafter", "minecraft:crafter", 0),
+    (Kind::Stonecutter, "Stonecutter", "minecraft:stonecutter", 0),
+    (Kind::Loom, "Loom", "minecraft:loom", 0),
+    (Kind::Cartography, "Cartography Table", "minecraft:cartography_table", 0),
+    (Kind::Furnace, "Furnace", "minecraft:furnace", 1),
+    (Kind::Smoker, "Smoker", "minecraft:smoker", 1),
+    (Kind::BlastFurnace, "Blast Furnace", "minecraft:blast_furnace", 1),
+    (Kind::Campfire, "Campfire", "minecraft:campfire", 1),
+    (Kind::Anvil, "Anvil", "minecraft:anvil", 2),
+    (Kind::Grindstone, "Grindstone", "minecraft:grindstone", 2),
+    (Kind::Smithing, "Smithing Table", "minecraft:smithing_table", 2),
+    (Kind::Enchanting, "Enchanting Table", "minecraft:enchanting_table", 3),
+    (Kind::Brewing, "Brewing Stand", "minecraft:brewing_stand", 3),
+    (Kind::Beacon, "Beacon", "minecraft:beacon", 3),
+    (Kind::Lectern, "Lectern", "minecraft:lectern", 4),
+    (Kind::Jukebox, "Jukebox", "minecraft:jukebox", 4),
+    (Kind::Shelf, "Chiseled bookshelf", "minecraft:chiseled_bookshelf", 4),
+];
+pub const GROUPS: [&str; 5] = ["Crafting", "Smelting and cooking", "Smithing", "Magic", "Other"];
+
+/// Whether the settings leave this station to the scene.
+pub fn station_on(kind: Kind) -> bool {
+    let off = state().config.off;
+    STATIONS.iter().position(|s| s.0 == kind).is_none_or(|i| off & (1 << i) == 0)
+}
 
 pub fn parse(text: &str) -> Config {
     let mut c = DEFAULT;
@@ -47,10 +124,28 @@ pub fn parse(text: &str) -> Config {
         let Some((k, v)) = line.split_once('=') else { continue };
         let (k, v) = (k.trim(), v.trim());
         let on = v == "true";
+        let n = v.parse::<u32>().unwrap_or(0);
         match k {
             "bars" => c.bars = on,
             "hints" => c.hints = on,
-            "speed" => c.speed = v.parse::<u8>().unwrap_or(1).min(2),
+            "speed" => c.speed = (n as u8).min(2),
+            "reach_why" => c.reach_why = on,
+            "invite" => c.invite = on,
+            "orbit_hold" => c.orbit_hold = on,
+            "arms_stretched" => c.arms_stretched = on,
+            "off" => c.off = n,
+            "preset" => c.preset = (n as u8).min(3),
+            "reduce_motion" => c.reduce_motion = on,
+            "quick_return" => c.quick_return = on,
+            "approach" => c.approach = (n as u16).clamp(25, 300),
+            "leaving" => c.leaving = (n as u16).clamp(25, 300),
+            "window" => c.window = (n as u16).min(60),
+            "lean" => c.lean = (n as u16).min(200),
+            "zoom" => c.zoom = (n as u16).clamp(50, 150),
+            "breathing" => c.breathing = on,
+            "shake" => c.shake = on,
+            "flashes" => c.flashes = on,
+            "developer" => c.developer = on,
             _ => {}
         }
     }
@@ -58,7 +153,17 @@ pub fn parse(text: &str) -> Config {
 }
 
 pub fn to_text(c: &Config) -> String {
-    format!("bars={}\nhints={}\nspeed={}\n", c.bars, c.hints, c.speed)
+    format!(
+        "bars={}\nhints={}\nspeed={}\nreach_why={}\ninvite={}\norbit_hold={}\narms_stretched={}\noff={}\npreset={}\nreduce_motion={}\nquick_return={}\napproach={}\nleaving={}\nwindow={}\nlean={}\nzoom={}\nbreathing={}\nshake={}\nflashes={}\ndeveloper={}\n",
+        c.bars, c.hints, c.speed, c.reach_why, c.invite, c.orbit_hold, c.arms_stretched, c.off, c.preset, c.reduce_motion, c.quick_return, c.approach, c.leaving, c.window, c.lean, c.zoom, c.breathing, c.shake, c.flashes, c.developer
+    )
+}
+
+/// The settings screen's Done: the new settings, saved.
+pub fn apply_config(c: Config) {
+    let mut s = state();
+    s.config = c;
+    save(&s);
 }
 
 /// Seconds the camera takes to lean over the table (after the walk), and to come back.
@@ -68,7 +173,9 @@ pub fn durations(c: &Config) -> (f32, f32) {
         2 => 1.6,
         _ => 1.0,
     };
-    (LEAN / speed, OUTRO / speed)
+    let fast = if c.reduce_motion { 1.5 } else { 1.0 };
+    let pace = |p: u16| speed * fast * (f32::from(p) / 100.0).max(0.25);
+    (LEAN / pace(c.approach), OUTRO / pace(c.leaving))
 }
 
 /// The lean over the table takes 1.2 seconds, the way back 1.05.
@@ -165,6 +272,10 @@ struct State {
     /// The scene's own use of a block is going on (not a click that opens a scene).
     own_use: bool,
     move_to: Option<[i32; 3]>,
+    /// A book sliding out of (false) or into (true) a shelf place: place, start, item.
+    slide: Option<(usize, Instant, bool, String)>,
+    /// Moving over to the next station: the camera slides straight to the side, the same yaw.
+    sliding: bool,
     /// The station beside the one in the scene that the cursor is over (the jar's "move over").
     neighbour: Option<[i32; 3]>,
     /// The last ritual: the enchanting's light, the beacon's, the anvil's strike.
@@ -224,6 +335,8 @@ static STATE: Mutex<State> = Mutex::new(State {
     place: None,
     own_use: false,
     move_to: None,
+    slide: None,
+    sliding: false,
     neighbour: None,
     burst: None,
     forge: None,
@@ -396,6 +509,11 @@ impl Kind {
 
 /// The station kind of a block (`low`: the player's feet are above the block, for the furnaces).
 pub fn kind_of(block: &str, low: bool) -> Option<Kind> {
+    let kind = kind_of_block(block, low)?;
+    station_on(kind).then_some(kind)
+}
+
+fn kind_of_block(block: &str, low: bool) -> Option<Kind> {
     let _ = low;
     Some(match block {
         "minecraft:crafting_table" => Kind::Table,
@@ -563,6 +681,7 @@ pub fn camera(open: bool, fallback: Option<[i32; 3]>, live: Option<Pose>, player
         if let Some(c) = moved {
             s.clicked = None;
             s.kind = s.clicked_kind;
+            s.sliding = true;
             Some(c.0)
         } else {
             (!s.plain).then_some(s.table)
@@ -593,6 +712,7 @@ pub fn camera(open: bool, fallback: Option<[i32; 3]>, live: Option<Pose>, player
             s.yaw = s.clicked_yaw.take().unwrap_or_else(|| facing(player, t, view_yaw));
             s.phase = Phase::Enter;
             s.since = Some(now);
+            s.sliding = false;
             s.hands = [None, None];
             s.selected = None;
             s.walk = None;
@@ -610,7 +730,10 @@ pub fn camera(open: bool, fallback: Option<[i32; 3]>, live: Option<Pose>, player
         (Phase::Enter | Phase::Inside, Some(t)) if t != s.table => {
             s.from = s.last;
             s.table = t;
-            s.yaw = s.clicked_yaw.take().unwrap_or_else(|| facing(player, t, view_yaw));
+            // The jar's move over: straight to the left or the right, looking the same way.
+            let keep = s.yaw;
+            let picked = s.clicked_yaw.take();
+            s.yaw = if s.sliding { keep } else { picked.unwrap_or_else(|| facing(player, t, view_yaw)) };
             s.phase = Phase::Enter;
             s.since = Some(now);
         }
@@ -632,9 +755,11 @@ pub fn camera(open: bool, fallback: Option<[i32; 3]>, live: Option<Pose>, player
                 let q = (k - walk.map_or(0.0, |w| w.2)) / enter;
                 if q >= 1.0 {
                     s.phase = Phase::Inside;
+                    s.sliding = false;
                 }
                 let ws = if walk.is_some() { WALK_SHARE } else { 0.0 };
-                Some(start.map_or(scene, |f| lean_pose(f, scene, q, ws, 0.045)))
+                let lift = if s.sliding || s.config.reduce_motion { 0.0 } else { 0.045 * f64::from(s.config.lean) / 100.0 };
+                Some(start.map_or(scene, |f| lean_pose(f, scene, q, ws, lift)))
             }
         },
         Phase::Inside => Some(scene),
@@ -786,14 +911,15 @@ pub fn presence(now: Instant) -> f32 {
 
 /// The field of view: the player's own, zooming to the scene's at the table.
 pub fn scene_fov(live: f32, now: Instant) -> f32 {
-    live + (FOV - live) * presence(now)
+    let zoom = f32::from(config().zoom.max(50)) / 100.0;
+    live + (FOV / zoom - live) * presence(now)
 }
 
 /// How tall the black bars are, as a share of their full height: in over the first 30% of the
 /// intro (the walk), out over its last 28%; the same on the way back.
 pub fn bars(now: Instant) -> f32 {
     let s = state();
-    if !s.config.bars {
+    if !s.config.bars || s.config.reduce_motion {
         return 0.0;
     }
     let (enter, exit) = durations(&s.config);
@@ -1915,8 +2041,8 @@ pub fn burning_text(ticks: i32) -> String {
 pub fn station_hint(kind: Kind) -> &'static str {
     match kind {
         Kind::Shelf if state().carrying => "LMB on an empty place \u{2014} put the book in  \u{b7}  Esc \u{2014} step away",
-        Kind::Shelf => "LMB on a book \u{2014} take it  \u{b7}  Esc \u{2014} step away",
-        Kind::Campfire => "Food onto a free spot of the fire  \u{b7}  Esc \u{2014} stand up",
+        Kind::Shelf => "LMB on a book \u{2014} take it, a book with writing \u{2014} read it  \u{b7}  Shift+LMB \u{2014} into the inventory  \u{b7}  Esc \u{2014} step away",
+        Kind::Campfire => "Food onto a free spot of the fire  \u{b7}  click food \u{2014} take it off  \u{b7}  Esc \u{2014} stand up",
         Kind::Table => HINTS,
         Kind::Furnace => "Fuel goes in below, things to smelt above  \u{b7}  LMB take / put  \u{b7}  RMB one at a time  \u{b7}  Shift to inventory  \u{b7}  Esc step back",
         Kind::Smoker => "Fuel behind the grate, food into the window  \u{b7}  LMB take / put  \u{b7}  RMB one at a time  \u{b7}  Shift to inventory  \u{b7}  Esc step back",
@@ -2329,6 +2455,10 @@ pub fn step_surface_hands(spot: Option<usize>, now: Instant, seconds: f64) -> Op
         targets[1] = grip;
         return step_hands_to(targets, Some(1), now);
     }
+    if let Some(hand) = grind_hand(t, yaw) {
+        targets[1] = hand;
+        return step_hands_to(targets, Some(1), now);
+    }
     if let Some(s) = spot.and_then(|slot| surface_spots(kind).iter().find(|s| s.slot == slot)) {
         let side = usize::from(s.x >= -0.1);
         let lift = if carrying { 0.075 } else { 0.045 };
@@ -2623,6 +2753,27 @@ pub fn set_own_use(on: bool) {
 
 pub fn set_move_to(pos: Option<[i32; 3]>) {
     state().move_to = pos;
+}
+
+/// ShelfStation's book: it slides out of its place towards the hand, or in from the hand.
+pub fn start_slide(slot: usize, inserting: bool, item: &str) {
+    state().slide = Some((slot, Instant::now(), inserting, item.to_owned()));
+}
+
+pub const SLIDE_TIME: f32 = 0.35;
+
+/// The sliding book: its item and where it is now (the place's middle, out of the face).
+pub fn slide_pose(t: [i32; 3], yaw: f32) -> Option<(String, DVec3)> {
+    let s = state();
+    let (slot, at, inserting, item) = s.slide.clone()?;
+    let age = at.elapsed().as_secs_f32();
+    if age >= SLIDE_TIME {
+        return None;
+    }
+    let spot = SHELF_SPOTS.iter().find(|p| p.slot == slot)?;
+    let k = f64::from(ease(age / SLIDE_TIME));
+    let out = if inserting { 1.0 - k } else { k };
+    Some((item, spot_point(t, yaw, spot) - forward(yaw) * (0.02 + 0.22 * out) - DVec3::Y * (0.06 * out)))
 }
 
 pub fn take_move_to() -> Option<[i32; 3]> {
@@ -3033,16 +3184,20 @@ fn spark_rand(i: u32, k: u32) -> f32 {
 pub fn draw_burst(batch: &mut HudBatch, atlas: &HudAtlas, cx: f32, cy: f32, age: f32, rgb: [u8; 3], beam: bool) {
     let fade = (1.0 - age / 1.4).clamp(0.0, 1.0);
     let rise = (age / 0.18).min(1.0);
-    if beam {
+    // Screen flashes off: only the sparks.
+    let flash = config().flashes;
+    if beam && flash {
         let w = 3.0 + 9.0 * fade;
         let top = (cy - 400.0 * rise).max(-10.0);
         for (k, a) in [(1.0f32, 0.35f32), (0.45, 0.6), (0.18, 0.9)] {
             batch.fill_quad(atlas, [[cx - w * k, top], [cx + w * k, top], [cx + w * k * 1.6, cy], [cx - w * k * 1.6, cy]], tint(rgb, a * fade));
         }
     }
-    glow(batch, atlas, cx, cy, 14.0 + 30.0 * age.min(0.6), [255, 255, 255], 0.75 * fade);
-    glow(batch, atlas, cx, cy, 24.0 + 40.0 * age.min(0.8), rgb, 0.55 * fade);
-    ring(batch, atlas, cx, cy, 8.0 + 60.0 * (age / 0.9).min(1.0).sqrt(), rgb, fade);
+    if flash {
+        glow(batch, atlas, cx, cy, 14.0 + 30.0 * age.min(0.6), [255, 255, 255], 0.75 * fade);
+        glow(batch, atlas, cx, cy, 24.0 + 40.0 * age.min(0.8), rgb, 0.55 * fade);
+        ring(batch, atlas, cx, cy, 8.0 + 60.0 * (age / 0.9).min(1.0).sqrt(), rgb, fade);
+    }
     for i in 0..28u32 {
         let a = spark_rand(i, 1) * std::f32::consts::TAU;
         let v = 30.0 + 70.0 * spark_rand(i, 2);
@@ -3058,26 +3213,44 @@ pub fn draw_burst(batch: &mut HudBatch, atlas: &HudAtlas, cx: f32, cy: f32, age:
     }
 }
 
-/// When the hammer hits the item (s) and when the swing is over.
-pub const FORGE_HIT: f32 = 0.5;
-pub const FORGE_TIME: f32 = 0.95;
+/// The forge's clock (s): the anvil's hammer comes in from beside the camera and strikes three
+/// times (the result is taken at the last strike); the grindstone's hand rubs the item on the
+/// wheel and lifts it off.
+pub const FORGE_HIT: f32 = 1.2;
+pub const FORGE_TIME: f32 = 1.6;
+pub const ANVIL_HITS: [f32; 3] = [0.6, 0.9, 1.2];
+pub const GRIND_TAKE: f32 = 1.1;
+pub const GRIND_TIME: f32 = 1.4;
 
-/// LMB on the anvil's result: the hammer swings, and the result is taken when it hits.
+fn forge_len(kind: Kind) -> f32 {
+    if kind == Kind::Grindstone { GRIND_TIME } else { FORGE_TIME }
+}
+
+fn forge_age() -> Option<f32> {
+    let s = state();
+    let f = s.forge?;
+    let age = f.0.elapsed().as_secs_f32();
+    (age < forge_len(s.kind)).then_some(age)
+}
+
+/// LMB on the anvil's or the grindstone's result: the work is shown, the result taken in it.
 pub fn start_forge(shift: bool) {
     let mut s = state();
-    if s.forge.is_some_and(|f| f.0.elapsed().as_secs_f32() < FORGE_TIME) {
+    let len = forge_len(s.kind);
+    if s.forge.is_some_and(|f| f.0.elapsed().as_secs_f32() < len) {
         return;
     }
     let now = Instant::now();
     s.forge = Some((now, shift, false));
-    s.burst = Some((Kind::Anvil, now));
+    s.burst = Some((s.kind, now));
 }
 
-/// The strike has come: take the result now (with Shift or not), once.
+/// The strike (or the lift off the wheel) has come: take the result now (with Shift or not), once.
 pub fn forge_due() -> Option<bool> {
     let mut s = state();
+    let take = if s.kind == Kind::Grindstone { GRIND_TAKE } else { FORGE_HIT };
     let f = s.forge.as_mut()?;
-    if f.2 || f.0.elapsed().as_secs_f32() < FORGE_HIT {
+    if f.2 || f.0.elapsed().as_secs_f32() < take {
         return None;
     }
     f.2 = true;
@@ -3085,24 +3258,63 @@ pub fn forge_due() -> Option<bool> {
 }
 
 pub fn forging() -> bool {
-    state().forge.is_some_and(|f| f.0.elapsed().as_secs_f32() < FORGE_TIME)
+    forge_age().is_some()
 }
 
-/// The hammer in the swing: the grip and the handle's angle from straight up, towards the item
-/// (raised to the right, down on the item at the strike, a little bounce after).
-pub fn hammer_pose(t: [i32; 3], yaw: f32) -> Option<(DVec3, f64)> {
-    let age = state().forge.map(|f| f.0.elapsed().as_secs_f32())?;
-    if age >= FORGE_TIME {
+/// Seconds since the last spark shower: the anvil's last strike, the grindstone's last turn.
+pub fn forge_spark_age() -> Option<f32> {
+    let kind = state().kind;
+    let age = forge_age()?;
+    if kind == Kind::Grindstone {
+        return (age > 0.15 && age < GRIND_TAKE).then(|| (age - 0.15) % 0.3);
+    }
+    ANVIL_HITS.iter().rev().find(|h| age >= **h).map(|h| age - h)
+}
+
+/// The grindstone's hand in the work: on the item, rubbing it to and fro, then up off the wheel.
+pub fn grind_hand(t: [i32; 3], yaw: f32) -> Option<DVec3> {
+    if state().kind != Kind::Grindstone {
         return None;
     }
+    let age = forge_age()?;
+    let item = spot_point(t, yaw, &GRINDSTONE_SPOTS[0]) + DVec3::Y * 0.06 - forward(yaw) * 0.04;
+    if age < GRIND_TAKE {
+        let rub = f64::from((age * 17.0).sin()) * 0.07 * f64::from(window(age, 0.0, 0.15));
+        return Some(item + forward(yaw) * rub + DVec3::Y * (rub.abs() * 0.3));
+    }
+    let k = f64::from(ease(window(age, GRIND_TAKE, GRIND_TIME)));
+    Some(item + DVec3::Y * (0.18 * k) - forward(yaw) * (0.12 * k))
+}
+
+/// The hammer in the work: the grip and the handle's angle from straight up, towards the item.
+/// It comes in big from beside the camera, is raised, strikes three times with a bounce after
+/// each, and goes back out the way it came.
+pub fn hammer_pose(t: [i32; 3], yaw: f32) -> Option<(DVec3, f64)> {
+    if state().kind != Kind::Anvil {
+        return None;
+    }
+    let age = forge_age()?;
     let item = spot_point(t, yaw, &ANVIL_SPOTS[0]);
-    let grip = item + right(yaw) * 0.46 - forward(yaw) * 0.08 + DVec3::Y * 0.06;
-    let raise = window(age, 0.0, 0.32);
-    let strike = window(age, 0.36, FORGE_HIT);
-    let back = window(age, 0.62, FORGE_TIME);
-    let angle = -25.0 * f64::from(ease(raise)) + 113.0 * f64::from(strike * strike) - 50.0 * f64::from(ease(back));
-    let lift = DVec3::Y * (0.12 * f64::from(ease(raise)) * (1.0 - f64::from(strike)));
-    Some((grip + lift, angle.to_radians()))
+    let rest = item + right(yaw) * 0.46 - forward(yaw) * 0.08 + DVec3::Y * 0.06;
+    let near = item + right(yaw) * 0.38 - forward(yaw) * 0.62 + DVec3::Y * 0.42;
+    let raised = rest + DVec3::Y * 0.12;
+    let (grip, deg) = if age < 0.4 {
+        let k = f64::from(ease(age / 0.4));
+        (near.lerp(raised, k), -40.0 + 15.0 * k)
+    } else if age < 1.3 {
+        let local = (age - 0.4) % 0.3;
+        if local < 0.2 {
+            let s = f64::from(local / 0.2);
+            (rest + DVec3::Y * (0.12 * (1.0 - s)), -25.0 + 113.0 * s * s)
+        } else {
+            let b = f64::from(ease((local - 0.2) / 0.1));
+            (rest + DVec3::Y * (0.12 * b), 88.0 - 113.0 * b)
+        }
+    } else {
+        let k = f64::from(ease(window(age, 1.3, FORGE_TIME)));
+        (raised.lerp(near, k), -25.0 - 15.0 * k)
+    };
+    Some((grip, deg.to_radians()))
 }
 
 /// The jar's hammer (HammerModel, from hammer.json): handle, head, pommel and collar as boxes, in

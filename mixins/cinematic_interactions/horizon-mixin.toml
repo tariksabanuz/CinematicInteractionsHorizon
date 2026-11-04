@@ -1,6 +1,6 @@
 [mod]
 id = "cinematic_interactions"
-version = "0.10.0"
+version = "0.11.0"
 priority = 100
 
 [compatibility]
@@ -12,6 +12,23 @@ id = "scene"
 file = "crates/horizon-client/src/lib.rs"
 name = "native_cinematic_interactions"
 source = "scene.rs"
+visibility = "pub"
+
+
+# The settings screen opened from the Options screen (the jar's CinematicSettingsScreen).
+[[module]]
+id = "menu"
+file = "crates/horizon-client/src/lib.rs"
+name = "native_cinematic_menu"
+source = "menu.rs"
+visibility = "pub"
+
+# In the renderer: where the Options screen's "Cinematic Interaction Settings..." button is.
+[[module]]
+id = "button"
+file = "crates/horizon-client-render/src/lib.rs"
+name = "native_cinematic_button"
+source = "button.rs"
 visibility = "pub"
 
 # Camera.setup: the eye glides over the table and back.
@@ -254,3 +271,80 @@ hook_version = 1
 kind = "HEAD"
 helper = "frame.rs"
 bindings = [{ name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" }]
+
+# Options' first page: the "Cinematic Interaction Settings..." button. Before other mods' layout
+# hooks (higher priority runs first), so it is laid out around their buttons.
+[[injection]]
+id = "options-layout"
+kind = "HEAD"
+cancellable = true
+priority = 300
+target = "horizon_client_render::options_ui::OptionsUi::layout"
+helper = "options_layout.rs"
+bindings = [
+  { name = "ui", ty = "&mut OptionsUi", value = "&mut *self" },
+  { name = "s", ty = "&Settings", value = "s" },
+  { name = "w", ty = "f32", value = "w" },
+  { name = "h", ty = "f32", value = "h" },
+]
+
+# The settings screen: drawn in place of the Options screen while it is open, and the Options
+# screen's mouse, drag, wheel and keys are its own then.
+[[injection]]
+id = "options-draw"
+kind = "HEAD"
+cancellable = true
+priority = 250
+target = "horizon_client::game::options::Game<'_>::draw_options"
+helper = "options_draw.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "batch", ty = "&mut HudBatch", value = "&mut *batch" },
+]
+
+[[injection]]
+id = "options-mouse"
+kind = "HEAD"
+cancellable = true
+priority = 250
+target = "horizon_client::game::options::Game<'_>::options_mouse"
+helper = "options_mouse.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "pressed", ty = "bool", value = "pressed" },
+  { name = "right", ty = "bool", value = "right" },
+]
+
+[[injection]]
+id = "options-drag"
+kind = "HEAD"
+cancellable = true
+priority = 250
+target = "horizon_client::game::options::Game<'_>::options_drag"
+helper = "options_drag.rs"
+bindings = [{ name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" }]
+
+[[injection]]
+id = "options-scroll"
+kind = "HEAD"
+cancellable = true
+priority = 250
+target = "horizon_client::game::options::Game<'_>::options_scroll"
+helper = "options_scroll.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "amount", ty = "f32", value = "amount" },
+]
+
+[[injection]]
+id = "options-key"
+kind = "HEAD"
+cancellable = true
+priority = 250
+target = "horizon_client::game::options::Game<'_>::options_key"
+helper = "options_key.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "key", ty = "KeyCode", value = "key" },
+  { name = "text", ty = "Option<&str>", value = "text" },
+]

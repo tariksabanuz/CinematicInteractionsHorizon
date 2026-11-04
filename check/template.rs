@@ -3,6 +3,7 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_mut, clippy::all)]
 extern crate self as horizon_client;
 extern crate self as horizon_assets;
+extern crate self as horizon_client_render;
 
 pub type Result<T, E = String> = std::result::Result<T, E>;
 
@@ -24,6 +25,7 @@ pub mod hud {
         pub fn sprite(&mut self, atlas: &HudAtlas, name: &str, x: f32, y: f32) {}
         pub fn sprite_scaled(&mut self, atlas: &HudAtlas, name: &str, x: f32, y: f32, w: f32, h: f32, color: u32) {}
         pub fn scale_since(&mut self, start: usize, cx: f32, cy: f32, sx: f32, sy: f32) {}
+        pub fn clip_since(&mut self, start: usize, x0: f32, y0: f32, x1: f32, y1: f32) {}
     }
     pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> u32 { u32::from_le_bytes([r, g, b, a]) }
 }
@@ -55,7 +57,7 @@ pub mod items {
 }
 pub mod text {
     #[derive(Clone, Debug)] pub struct Text;
-    impl Text { pub fn literal(s: impl Into<String>) -> Text { Text } pub fn styled(s: impl Into<String>, style: Style) -> Text { Text } }
+    impl Text { pub fn legacy(s: &str) -> Text { Text } pub fn literal(s: impl Into<String>) -> Text { Text } pub fn styled(s: impl Into<String>, style: Style) -> Text { Text } }
     #[derive(Clone, Debug, Default)] pub struct Style { pub color: Option<u32>, pub font: Option<String>, pub bold: Option<bool> }
 }
 pub mod item_tooltip { pub fn name_line(stack: &crate::items::ItemStack, translate: &dyn Fn(&str) -> Option<String>) -> String { String::new() } }
@@ -93,6 +95,34 @@ pub mod containers {
 }
 pub mod container_screen { pub struct Clicks; impl Clicks { pub fn skip_release(&mut self) {} } }
 
+pub mod ui {
+    use crate::hud::{HudAtlas, HudBatch};
+    use crate::text::Text;
+    pub fn button(batch: &mut HudBatch, atlas: &HudAtlas, x: f32, y: f32, w: f32, h: f32, label: &Text, active: bool, hover: bool) {}
+    pub fn slider(batch: &mut HudBatch, atlas: &HudAtlas, x: f32, y: f32, w: f32, label: &Text, value: f32, hover: bool, active: bool, dragging: bool) {}
+    pub fn slider_value(x: f32, w: f32, cx: f32) -> f32 { 0.0 }
+    pub fn centered_text(batch: &mut HudBatch, atlas: &HudAtlas, text: &Text, x: f32, y: f32, w: f32, color: u32) {}
+    pub fn separators(batch: &mut HudBatch, atlas: &HudAtlas, header_bottom: f32, footer_top: f32, in_world: bool) {}
+    pub fn scrollbar(batch: &mut HudBatch, atlas: &HudAtlas, x: f32, top: f32, bottom: f32, content: f32, scroll: f32) {}
+}
+pub mod options_ui {
+    use crate::text::Text;
+    #[derive(Clone, Copy, PartialEq, Eq)] pub enum Page { Main, Other }
+    pub enum Event { ButtonClick }
+    pub enum Act { None }
+    pub struct Settings;
+    pub struct Widget { pub x: f32, pub y: f32, pub w: f32 }
+    #[derive(Default)] pub struct OptionsUi;
+    impl OptionsUi { pub fn page(&self) -> Page { Page::Main } pub fn layout(&mut self, s: &Settings, w: f32, h: f32) -> (Vec<Widget>, f32, f32, f32) { (Vec::new(), 0.0, 0.0, 0.0) } }
+    pub fn button(x: f32, y: f32, w: f32, label: Text, act: Act) -> Widget { Widget { x, y, w } }
+    //OPTIONS_LAYOUT//
+}
+pub mod native_cinematic_menu {
+//MENU//
+}
+pub mod native_cinematic_button {
+//BUTTON//
+}
 pub mod native_cinematic_interactions {
 //SCENE//
 }
@@ -103,14 +133,14 @@ pub mod game {
     use crate::mesher::Vertex;
     use crate::first_person::Hand;
     use crate::Result;
-    #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)] pub enum KeyCode { KeyW, KeyA, KeyS, KeyD, Space, ShiftLeft, KeyE, KeyH }
+    #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)] pub enum KeyCode { KeyW, KeyA, KeyS, KeyD, Space, ShiftLeft, KeyE, KeyH, Escape, Backspace }
     #[derive(Clone, Copy, PartialEq, Eq)] pub(crate) enum Screen { Playing, Inventory }
     #[derive(Clone, Copy)] pub(crate) struct Hit { pub(crate) pos: [i32; 3], pub(crate) face: [i32; 3], pub(crate) point: [f64; 3] }
     pub struct V3 { pub x: f64, pub y: f64, pub z: f64 }
     pub struct PlayerMotion { pub position: V3, pub yaw: f32, pub pitch: f32 }
     pub struct Config { pub width: u32, pub height: u32 }
     pub struct Renderer { pub config: Config }
-    pub struct UiState { pub hide_gui: bool }
+    pub struct UiState { pub hide_gui: bool, pub options: crate::options_ui::OptionsUi }
     pub struct UiResources { pub atlas: crate::hud::HudAtlas }
     pub struct Resources;
     impl Resources { pub(crate) fn player_arm(&self, slim: bool, left: bool) -> &Option<crate::mobs::Part> { &None } }
@@ -148,7 +178,7 @@ pub mod game {
     pub struct Game<'a> {
         pub(crate) screen: Screen, pub(crate) craft_size: usize, pub(crate) station: Option<stations::Station>, pub(crate) creative: bool, pub(crate) experience: Experience, pub(crate) container: Option<(i32, i32, i32)>, pub(crate) craft_table: Option<[i32; 3]>, pub(crate) remote: Option<Remote>,
         pub(crate) player: Option<PlayerMotion>, pub(crate) yaw: f32, pub(crate) renderer: Option<Renderer>, pub(crate) started: std::time::Instant,
-        pub(crate) cursor: (f32, f32), pub(crate) world: World, pub(crate) player_model: Option<crate::mobs::Mob>, pub(crate) gui: UiResources,
+        pub(crate) cursor: (f32, f32), pub(crate) dragging: bool, pub(crate) world: World, pub(crate) player_model: Option<crate::mobs::Mob>, pub(crate) gui: UiResources,
         pub(crate) res: std::sync::Arc<Resources>, pub(crate) craft_grid: Vec<Option<ItemStack>>, pub(crate) carried: Option<ItemStack>, pub(crate) inv_drag: Option<(i32, Vec<usize>)>,
         pub(crate) selected: usize, pub(crate) inventory: Vec<Option<ItemStack>>, pub(crate) ui: UiState, pub(crate) inv_clicks: crate::container_screen::Clicks,
         pub(crate) keys: std::collections::HashSet<KeyCode>, pub(crate) offhand: Option<ItemStack>, pub(crate) pitch: f32, pub(crate) pack: PackResources, pub(crate) audio: Audio, pub(crate) level: Level, pub(crate) recipe_ui: RecipeUi, pub(crate) forced_hit: Option<Hit>, pub(crate) world_root: std::path::PathBuf, pub(crate) dim: Dim, pub(crate) _l: std::marker::PhantomData<&'a ()>,
@@ -253,6 +283,21 @@ pub mod game {
         use super::KeyCode;
         //USE_TABLE//
         //CAMPFIRE_TICK//
+    }
+    pub mod options {
+        use super::{Game, KeyCode};
+        use crate::hud::HudBatch;
+        use crate::Result;
+        use crate::options_ui::{Event, Page};
+        impl Game<'_> {
+            pub(super) fn gui_size(&self) -> (f32, f32) { (0.0, 0.0) }
+            pub(super) fn handle_option_events(&mut self, events: Vec<Event>) -> Result<()> { Ok(()) }
+        }
+        //OPTIONS_DRAW//
+        //OPTIONS_MOUSE//
+        //OPTIONS_DRAG//
+        //OPTIONS_SCROLL//
+        //OPTIONS_KEY//
     }
     pub mod native_hooks {
         pub struct NativeMod { pub id: String, pub title: String, pub description: String, pub keys: Vec<String> }

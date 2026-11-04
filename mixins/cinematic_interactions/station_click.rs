@@ -36,7 +36,7 @@ fn cinematic_station_click(game: &mut crate::game::Game<'_>, right: bool) -> ::c
         return ::core::ops::ControlFlow::Break(true);
     };
     // The anvil: the hammer swings first, the result is taken when it hits (EnchantFx's tick).
-    if kind == ci::Kind::Anvil && slot == 650 && !right {
+    if matches!(kind, ci::Kind::Anvil | ci::Kind::Grindstone) && slot == 650 && !right {
         if game.slot_view(650).is_some() && game.carried.is_none() {
             ci::start_forge(game.has_shift_down());
         }

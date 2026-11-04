@@ -221,6 +221,15 @@ fn cinematic_hands(game: &mut crate::game::Game<'_>, alpha: f64) -> ::core::ops:
             }
         }
     }
+    // The chiseled bookshelf's book sliding out of its place or in.
+    if surface
+        && ci::kind() == ci::Kind::Shelf
+        && let Some((item, at)) = ci::slide_pose(table, yaw)
+    {
+        let stack = ItemStack::new(&item, 1);
+        let state = game.resolve_item(&stack, DisplayContext::Fixed, None, 70);
+        game.submit_item_world(&state, ci::item_upright(fix(at), yaw, 0.22, 90.0), item_light, &mut out);
+    }
     // The anvil's hammer in the swing.
     if surface && ci::kind() == ci::Kind::Anvil {
         quads.extend(ci::hammer_quads(table, yaw));

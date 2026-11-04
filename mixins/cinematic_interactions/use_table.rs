@@ -23,7 +23,9 @@ fn cinematic_use(game: &mut crate::game::Game<'_>, hand: Hand) -> ::core::ops::C
         && let Some(p) = game.player.as_ref()
         && let Some(message) = ci::reach(glam::DVec3::new(p.position.x, p.position.y, p.position.z), hit.pos)
     {
-        ci::toast(message, now);
+        if ci::config().reach_why {
+            ci::toast(message, now);
+        }
         return ::core::ops::ControlFlow::Break(true);
     }
     ci::clicked_kind(kind, hit.pos, sneaking, now);
