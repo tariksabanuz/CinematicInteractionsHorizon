@@ -1,0 +1,257 @@
+[mod]
+id = "cinematic_interactions"
+version = "0.8.0"
+priority = 100
+
+[compatibility]
+horizon_revision = "9d979caa48a3bb58203319b9ea044db58c38e0d8"
+
+# The scene: camera, hands, the cursor on the table, the screen's drawing, range and settings.
+[[module]]
+id = "scene"
+file = "crates/horizon-client/src/lib.rs"
+name = "native_cinematic_interactions"
+source = "scene.rs"
+visibility = "pub"
+
+# Camera.setup: the eye glides over the table and back.
+[[injection]]
+id = "camera"
+kind = "HEAD"
+cancellable = true
+priority = 300
+target = "horizon_client::game::perspective::Game<'_>::camera_view"
+helper = "camera.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "partial", ty = "f32", value = "partial" },
+]
+
+# Camera.calculateFov: a little zoomed in at the table.
+[[injection]]
+id = "fov"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::fov::Game<'_>::fov_degrees"
+helper = "fov.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "self" },
+  { name = "partial", ty = "f32", value = "partial" },
+  { name = "camera", ty = "[f64; 3]", value = "camera" },
+]
+
+# The hand pass: both arms, the grid's items, the result and the cell's frame.
+[[injection]]
+id = "hands"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::Game<'_>::hand_geometry"
+helper = "hands.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "alpha", ty = "f64", value = "alpha" },
+]
+
+# The slot under the cursor: the panel, the table's cells, the result.
+[[injection]]
+id = "slot-at"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::Game<'_>::slot_at"
+helper = "slot_at.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "self" },
+  { name = "batch", ty = "&HudBatch", value = "batch" },
+  { name = "x", ty = "f32", value = "x" },
+  { name = "y", ty = "f32", value = "y" },
+]
+
+[[injection]]
+id = "outside"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::Game<'_>::clicked_outside"
+helper = "outside.rs"
+bindings = [{ name = "batch", ty = "&HudBatch", value = "batch" }]
+
+# The book button and the recipe panel take their clicks.
+[[injection]]
+id = "press"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::Game<'_>::inventory_press"
+helper = "press.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "right", ty = "bool", value = "right" },
+]
+
+# The recipe panel of the scene: drawn in the book's place, and its clicks.
+[[injection]]
+id = "book-draw"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::recipe_book::Game<'_>::draw_recipe_book"
+helper = "book_draw.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "batch", ty = "&mut HudBatch", value = "&mut *batch" },
+]
+
+[[injection]]
+id = "book-click"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::recipe_book::Game<'_>::recipe_book_click"
+helper = "book_click.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "right", ty = "bool", value = "right" },
+]
+
+# The crafting table keeps its items: left on it when the screen closes (the server), back in its
+# grid when it opens, dropped when the table is gone, and drawn on its top in the world.
+[[injection]]
+id = "table-close"
+kind = "HEAD"
+target = "horizon_client::game::Game<'_>::close_container"
+helper = "table_close.rs"
+bindings = [{ name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" }]
+
+[[injection]]
+id = "table-open"
+kind = "HEAD"
+target = "horizon_client::game::Game<'_>::open_menu"
+helper = "table_open.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "pos", ty = "[i32; 3]", value = "pos" },
+]
+
+[[injection]]
+id = "table-tick"
+kind = "HEAD"
+target = "horizon_client::game::levels::Game<'_>::tick_server"
+helper = "table_tick.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "paused", ty = "bool", value = "paused" },
+]
+
+[[injection]]
+id = "table-draw"
+kind = "HEAD"
+target = "horizon_client::game::campfire::Game<'_>::campfire_geometry"
+helper = "table_draw.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
+  { name = "camera", ty = "glam::DVec3", value = "camera" },
+  { name = "out", ty = "&mut Vec<horizon_client::mesher::Vertex>", value = "&mut *out" },
+]
+
+# The campfire: food the scene's hand put on the fire, used on it the game's way, once a tick.
+[[injection]]
+id = "campfire-tick"
+kind = "HEAD"
+target = "horizon_client::game::remote::Game<'_>::tick_remote"
+helper = "campfire_tick.rs"
+bindings = [{ name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" }]
+
+# A station's clicks in the scene: the enchanting runes, the beacon's powers and payment, the spots.
+[[injection]]
+id = "station-click"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::stations::Game<'_>::station_click"
+helper = "station_click.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "right", ty = "bool", value = "right" },
+]
+
+# The crafting screen in the scene: the panel, the hints, the tooltips.
+[[injection]]
+id = "draw"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::Game<'_>::draw_inventory"
+helper = "draw.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "batch", ty = "&mut HudBatch", value = "&mut *batch" },
+]
+
+# The HUD steps aside in the scene; the black bars and the range message.
+[[injection]]
+id = "hud"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::Game<'_>::hud_layers"
+helper = "hud.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "size", ty = "[u32; 2]", value = "size" },
+]
+
+# A right click on a crafting table: range, sneak, the table remembered.
+[[injection]]
+id = "use-table"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::remote::Game<'_>::remote_use_item_on"
+helper = "use_table.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "hand", ty = "Hand", value = "hand" },
+]
+
+# A step or a jump leaves the table.
+[[injection]]
+id = "keys"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::Game<'_>::key_pressed"
+helper = "keys.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "key", ty = "KeyCode", value = "key" },
+]
+
+# Options > Mods: the row and its settings page.
+[[injection]]
+id = "listed"
+hook = "mods"
+hook_version = 1
+kind = "HEAD"
+helper = "listed.rs"
+bindings = [{ name = "mods", ty = "&mut Vec<crate::game::native_hooks::NativeMod>", value = "&mut *mods" }]
+
+[[injection]]
+id = "settings"
+hook = "settings"
+hook_version = 1
+kind = "HEAD"
+helper = "settings.rs"
+bindings = [
+  { name = "mod_id", ty = "&str", value = "mod_id" },
+  { name = "buttons", ty = "&mut Vec<String>", value = "&mut *buttons" },
+]
+
+[[injection]]
+id = "settings-click"
+hook = "settings_click"
+hook_version = 1
+kind = "HEAD"
+helper = "settings_click.rs"
+bindings = [
+  { name = "mod_id", ty = "&str", value = "mod_id" },
+  { name = "button", ty = "usize", value = "button" },
+]
+
+[[injection]]
+id = "frame"
+hook = "frame"
+hook_version = 1
+kind = "HEAD"
+helper = "frame.rs"
+bindings = [{ name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" }]
