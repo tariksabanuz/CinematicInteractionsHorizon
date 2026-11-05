@@ -1,6 +1,11 @@
 // At the table a step (W, A, S, D) or a jump leaves it, as Esc and E do.
 fn cinematic_keys(game: &mut crate::game::Game<'_>, key: KeyCode) -> ::core::ops::ControlFlow<Result<()>> {
     use horizon_client_lib::native_cinematic_interactions_scene as ci;
+    // Esc in the anvil's rename box closes the box, not the scene.
+    if key == KeyCode::Escape && ci::renaming() {
+        ci::set_renaming(false);
+        return ::core::ops::ControlFlow::Break(Ok(()));
+    }
     // H at a campfire: sit by the fire (CampfireHint; the jar's key.cinematic.sit).
     if key == KeyCode::KeyH && ci::is_active() && game.screen == crate::game::Screen::Playing && !game.spectator() {
         let Some(hit) = game.pick() else {

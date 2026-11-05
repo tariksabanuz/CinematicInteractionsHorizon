@@ -32,6 +32,37 @@ fn cinematic_station_click(game: &mut crate::game::Game<'_>, right: bool) -> ::c
             return ::core::ops::ControlFlow::Break(true);
         }
     }
+    // A shape round the stonecutter's blade: the recipe is chosen (StonecutterMenu.clickMenuButton,
+    // with its sound) and one cut is taken into the hand, or with Shift the whole stack into the
+    // inventory; a hand holding something else takes nothing.
+    if !right && kind == ci::Kind::Stonecutter {
+        let seconds = game.started.elapsed().as_secs_f64();
+        let picked = game.station.as_ref().filter(|st| st.inputs.first().is_some_and(|i| i.is_some())).and_then(|st| {
+            let range = ci::stone_shown(st.stone.recipes.len());
+            let k = ci::stone_at(ci::ndc((x, y), batch.width, batch.height), range.len(), seconds)?;
+            let index = range.start + k;
+            let made = st.stone.recipes.get(index).and_then(|r| game.stations().recipes.stonecutting.get(*r)).map(|c| c.result.clone());
+            Some((index, made))
+        });
+        if let Some((index, made)) = picked {
+            if game.carried.as_ref().is_some_and(|c| made.as_ref().is_none_or(|m| m.item != c.item)) {
+                return ::core::ops::ControlFlow::Break(true);
+            }
+            let mut taken = false;
+            let flag = &mut taken;
+            game.menu_session(|menu, env, _| {
+                *flag = menu.button(env, index as i32);
+                Some(*flag)
+            });
+            if taken {
+                game.audio.play("minecraft:ui.stonecutter.select_recipe", None, 1.0, 1.0);
+                game.remote_station_button(index as i32);
+            }
+            let input = if game.has_shift_down() { horizon_client::menu::Input::QuickMove } else { horizon_client::menu::Input::Pickup };
+            game.menu_click(Some(650), 0, input);
+            return ::core::ops::ControlFlow::Break(true);
+        }
+    }
     let Some(slot) = game.slot_at(&batch, x, y) else {
         return ::core::ops::ControlFlow::Break(true);
     };

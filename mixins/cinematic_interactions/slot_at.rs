@@ -13,5 +13,8 @@ fn cinematic_slot_at(game: &crate::game::Game<'_>, batch: &HudBatch, x: f32, y: 
         return ::core::ops::ControlFlow::Break(ci::surface_slot_at(batch.width, batch.height, x, y));
     }
     let seconds = game.started.elapsed().as_secs_f64();
+    if ci::is_crafter() {
+        return ::core::ops::ControlFlow::Break(ci::crafter_slot_at(batch.width, batch.height, x, y, seconds));
+    }
     ::core::ops::ControlFlow::Break(ci::slot_at(batch.width, batch.height, x, y, seconds))
 }

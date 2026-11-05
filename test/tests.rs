@@ -458,3 +458,59 @@ fn the_campfire_spots_are_the_renderers() {
     let r = ci::rune_points([0, 64, 0], 0.0);
     assert!(r[1].y > r[0].y && (r[0].y - r[2].y).abs() < 1e-9);
 }
+
+#[test]
+fn the_stonecutters_shapes_stand_round_the_blade() {
+    for yaw in [0.0f32, 90.0, 180.0, 270.0] {
+        let pose = ci::pose_for(ci::Kind::Stonecutter, T, yaw);
+        for n in [1usize, 3, 7, 12] {
+            let pts: Vec<DVec3> = (0..n).map(|k| ci::stone_point(T, yaw, k, n, 0.0)).collect();
+            // From the left over the top to the right, symmetric round the blade.
+            let first = (pts[0] - ci::top_center(T)).dot(ci::right(yaw));
+            let last = (pts[n - 1] - ci::top_center(T)).dot(ci::right(yaw));
+            assert!((first + last).abs() < 1e-6, "yaw {yaw} n {n}: {first} {last}");
+            if n > 1 {
+                assert!(first < 0.0, "yaw {yaw} n {n}: the first shape is on the left");
+            }
+            // All of them in front of the camera and on the screen.
+            for p in &pts {
+                let s = ci::project(pose, *p, 66.0, 1920.0 / 1009.0).expect("in front");
+                assert!(s.0.abs() < 1.0 && s.1.abs() < 1.0, "yaw {yaw} n {n}: {s:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn the_wheel_pages_through_the_shapes() {
+    reset();
+    ci::stone_scroll(-1.0, 5);
+    assert_eq!(ci::stone_page(), 0, "one page: nothing to scroll");
+    ci::stone_scroll(-1.0, 20);
+    assert_eq!(ci::stone_page(), 4);
+    ci::stone_scroll(-1.0, 20);
+    ci::stone_scroll(-1.0, 20);
+    assert_eq!(ci::stone_page(), 8, "never past the last page");
+    assert_eq!(ci::stone_shown(20), 8..20);
+    ci::stone_scroll(1.0, 20);
+    assert_eq!(ci::stone_shown(20), 4..16);
+    assert_eq!(ci::stone_shown(3), 0..3, "a shorter list starts over");
+}
+
+#[test]
+fn a_shut_crafter_window_has_a_lid_over_its_cell() {
+    for yaw in [0.0f32, 90.0, 180.0, 270.0] {
+        for i in 0..9 {
+            let lid = ci::lid_quads(T, yaw, i);
+            assert_eq!(lid.len(), 5);
+            let c = ci::cell_center(T, yaw, i);
+            let mid = lid[0].0.iter().fold(DVec3::ZERO, |a, p| a + *p) / 4.0;
+            assert!((mid - c).length() < 0.01, "yaw {yaw} cell {i}");
+            // Within the cell's 3 pixels, just over the top.
+            for p in &lid[0].0 {
+                assert!((p.y - c.y) > 0.0 && (p.y - c.y) < 0.01);
+                assert!((*p - c).length() < 1.5 * 1.42 / 16.0);
+            }
+        }
+    }
+}

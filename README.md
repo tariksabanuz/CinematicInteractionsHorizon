@@ -22,6 +22,9 @@ Other stations work the same way, in the world instead of a window:
 - Enchanting table: a faint blue circle marks the lapis spot; lapis lies on it with its count. The item floats upright over the book, turning, and the three offers float over the table as the jar's turning purple rune circles (cost, a clue in the galactic alphabet, a blue star per lapis); touch one to enchant, and a beam of light, a ring and sparks rise from the item.
 - Anvil: the item lies on the anvil with its name floating above (and the cost in green), what goes into it lies on top; LMB on the result swings the jar's hammer down on it; the result is yours when it hits, with sparks.
 - Beacon: the powers float beside it in rings of their effect's colour, with the pyramid level they need; a ring lies on the core, the payment on the glass, and a click on it lights the beacon with a beam. The idle hands stay out of the view.
+- Crafter: its nine windows are the cells on its top. Items stand in them, a click with an empty hand on an empty window shuts it (a lid lies over it) or opens it again, and what it would craft floats over the far edge.
+- Stonecutter: the stone lies by the saw and every shape it can be cut into stands round the blade, with "×2" under the ones that give two. LMB on a shape cuts one into your hand, Shift cuts the whole stack into the inventory, the wheel shows more shapes.
+- Anvil rename: click the floating name and a "New name" box opens with the name selected; type, then Enter keeps it and Esc closes the box.
 - Chiseled bookshelf: click a book to take it, click an empty place with a book to put it in.
 - Campfire and soul campfire: looking at one shows "[H] Sit by the fire". H sits you down by it; carried food goes on a free spot of the fire. Esc stands up.
 - Next to another station: the cursor on it outlines it with "Name  RMB — move over", and RMB moves the scene over to it.
@@ -37,6 +40,6 @@ A port of [Cinematic Interactions](https://www.curseforge.com/minecraft/mc-mods/
 
 ## Building
 
-`python3 check/build.py --test` type-checks the hooks against stand-ins for the Horizon signatures they use and runs the tests. `python3 tools/package.py` writes `target/cinematic_interactions-0.11.1.hnmod`.
+`python3 check/build.py --test` type-checks the hooks against stand-ins for the Horizon signatures they use and runs the tests. `python3 tools/package.py` writes `target/cinematic_interactions-0.12.0.hnmod`.
 
 MIT licence.

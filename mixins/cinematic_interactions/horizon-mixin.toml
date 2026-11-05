@@ -1,6 +1,6 @@
 [mod]
 id = "cinematic_interactions"
-version = "0.11.1"
+version = "0.12.0"
 priority = 100
 
 [compatibility]
@@ -360,4 +360,36 @@ helper = "dx12_terrain.rs"
 bindings = [
   { name = "this", ty = "&On<'_>", value = "self" },
   { name = "descriptor", ty = "&wgpu::ShaderModuleDescriptor<'_>", value = "&descriptor" },
+]
+
+# The wheel at the stonecutter pages through the shapes round the blade.
+[[injection]]
+id = "stone-scroll"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::stations::Game<'_>::station_scroll"
+helper = "stone_scroll.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "d", ty = "f32", value = "d" },
+]
+
+# The anvil: typing goes to the name only while the "New name" box is open, and Enter closes it.
+[[injection]]
+id = "name-typing"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::stations::Game<'_>::station_typing"
+helper = "name_typing.rs"
+bindings = [{ name = "game", ty = "&crate::game::Game<'_>", value = "self" }]
+
+[[injection]]
+id = "name-key"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::stations::Game<'_>::station_key"
+helper = "name_key.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "key", ty = "winit::keyboard::KeyCode", value = "key" },
 ]

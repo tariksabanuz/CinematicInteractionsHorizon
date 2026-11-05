@@ -21,6 +21,25 @@ fn cinematic_press(game: &mut crate::game::Game<'_>, right: bool) -> ::core::ops
     {
         let batch = HudBatch::new(size);
         let (x, y) = game.cursor;
+        // The anvil's floating name: a click opens the "New name" box with the name selected; a
+        // click anywhere else closes it (the name typed stays).
+        if kind == ci::Kind::Anvil && !right {
+            if !ci::renaming() && ci::on_name(x, y) {
+                if let Some(st) = game.station.as_mut() {
+                    let len = st.rename.value.chars().count();
+                    st.rename.cursor = len;
+                    st.rename.highlight = 0;
+                    st.rename.focused = true;
+                    st.rename.reset_blink();
+                }
+                ci::set_renaming(true);
+                game.inv_clicks.skip_release();
+                return ::core::ops::ControlFlow::Break(());
+            }
+            if ci::renaming() {
+                ci::set_renaming(false);
+            }
+        }
         if !ci::on_panel(batch.width, x, y) {
             // The campfire: carried food onto a free spot (CampfireStation.click, the game's own
             // use of the food on the fire).

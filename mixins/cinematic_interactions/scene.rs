@@ -17,11 +17,11 @@ use std::time::Instant;
 
 pub const ID: &str = "cinematic_interactions";
 pub const NAME: &str = "Cinematic Interactions";
-pub const VERSION: &str = "0.11.1";
+pub const VERSION: &str = "0.12.0";
 pub const DESCRIPTION: &str = "By tariksabanuz. Right-click a crafting table: you walk up, the camera leans over it, your arms reach \
 for the grid and the items lie on the table, and stay there when you leave. Furnaces, smithing and cartography tables, \
-grindstones, brewing stands, looms, enchanting tables, beacons and chiseled bookshelves are worked in the world too; \
-press H at a campfire to sit by the fire. Sneak + right-click opens the normal screen.";
+grindstones, brewing stands, looms, crafters, stonecutters, enchanting tables, beacons and chiseled bookshelves are worked in \
+the world too; press H at a campfire to sit by the fire. Sneak + right-click opens the normal screen.";
 
 /// A camera pose: where the eye is, its yaw and its pitch (degrees, Minecraft's convention).
 pub type Pose = (DVec3, f32, f32);
@@ -292,6 +292,12 @@ struct State {
     lay_done: usize,
     /// "Laying out": when it began, the cells the hands visit, the recipe and whether it is a Shift.
     lay: Option<(Instant, Vec<usize>, usize, bool)>,
+    /// The anvil's rename box is open (the floating name was clicked).
+    renaming: bool,
+    /// Where the anvil's floating name was drawn last (GUI units), for its click.
+    name_rect: Option<[f32; 4]>,
+    /// The stonecutter's first shape shown (the wheel pages through them).
+    stone_page: usize,
 }
 
 static STATE: Mutex<State> = Mutex::new(State {
@@ -340,6 +346,9 @@ static STATE: Mutex<State> = Mutex::new(State {
     neighbour: None,
     burst: None,
     forge: None,
+    renaming: false,
+    name_rect: None,
+    stone_page: 0,
 });
 
 fn state() -> std::sync::MutexGuard<'static, State> {
@@ -716,6 +725,9 @@ pub fn camera(open: bool, fallback: Option<[i32; 3]>, live: Option<Pose>, player
             s.hands = [None, None];
             s.selected = None;
             s.walk = None;
+            s.renaming = false;
+            s.name_rect = None;
+            s.stone_page = 0;
             if fresh && let (Some(l), Some(p)) = (live, player) {
                 let stand = stand_for(s.kind, t, s.yaw, p.y);
                 let far = DVec3::new(stand.x - p.x, 0.0, stand.z - p.z).length();
@@ -736,11 +748,16 @@ pub fn camera(open: bool, fallback: Option<[i32; 3]>, live: Option<Pose>, player
             s.yaw = if s.sliding { keep } else { picked.unwrap_or_else(|| facing(player, t, view_yaw)) };
             s.phase = Phase::Enter;
             s.since = Some(now);
+            s.renaming = false;
+            s.name_rect = None;
+            s.stone_page = 0;
         }
         (Phase::Enter | Phase::Inside, None) => {
             s.from = s.last;
             s.phase = Phase::Exit;
             s.since = Some(now);
+            s.renaming = false;
+            s.name_rect = None;
         }
         _ => {}
     }
@@ -871,7 +888,7 @@ pub fn take_arrival(now: Instant) -> Option<(DVec3, f32)> {
 /// The scene owns the screen: its drawing and what is under the cursor.
 pub fn controls() -> bool {
     let s = state();
-    s.active && !s.plain && (s.kind == Kind::Table || is_furnace(s.kind) || is_surface(s.kind)) && matches!(s.phase, Phase::Enter | Phase::Inside)
+    s.active && !s.plain && (matches!(s.kind, Kind::Table | Kind::Crafter) || is_furnace(s.kind) || is_surface(s.kind)) && matches!(s.phase, Phase::Enter | Phase::Inside)
 }
 
 /// The crafting table is on: the arms and the items on its top.
@@ -2332,7 +2349,7 @@ fn surface_spots_of(s: &State, kind: Kind) -> &'static [Spot] {
 }
 
 pub fn is_surface(kind: Kind) -> bool {
-    matches!(kind, Kind::Anvil | Kind::Smithing | Kind::Cartography | Kind::Grindstone | Kind::Brewing | Kind::Enchanting | Kind::Beacon | Kind::Campfire | Kind::Loom | Kind::Shelf)
+    matches!(kind, Kind::Anvil | Kind::Smithing | Kind::Cartography | Kind::Grindstone | Kind::Brewing | Kind::Enchanting | Kind::Beacon | Kind::Campfire | Kind::Loom | Kind::Shelf | Kind::Stonecutter)
 }
 
 /// Where a station's spots are in the menu: a brewing stand is a container (300 on), the others
@@ -2343,7 +2360,7 @@ pub fn spot_base(kind: Kind) -> usize {
 
 /// Whether the worked spot gives the result (650).
 pub fn has_work(kind: Kind) -> bool {
-    !matches!(kind, Kind::Brewing | Kind::Enchanting | Kind::Beacon | Kind::Campfire | Kind::Shelf)
+    !matches!(kind, Kind::Brewing | Kind::Enchanting | Kind::Beacon | Kind::Campfire | Kind::Shelf | Kind::Stonecutter)
 }
 
 pub fn surface_spots(kind: Kind) -> &'static [Spot] {
@@ -2362,6 +2379,7 @@ fn spots_of(kind: Kind) -> &'static [Spot] {
         Kind::Beacon => &BEACON_SPOTS,
         Kind::Loom => &LOOM_SPOTS,
         Kind::Shelf => &SHELF_SPOTS,
+        Kind::Stonecutter => &STONECUTTER_SPOTS,
         _ => &[],
     }
 }
@@ -2432,6 +2450,7 @@ pub fn surface_rest(kind: Kind, side: usize, t: [i32; 3], yaw: f32) -> DVec3 {
         Kind::Brewing => -0.85,
         Kind::Grindstone => -0.2,
         Kind::Enchanting => -0.25,
+        Kind::Stonecutter => -0.4375,
         Kind::Shelf => -0.62,
         _ => 0.0,
     };
@@ -2518,6 +2537,7 @@ pub fn spot_title(kind: Kind, slot: usize) -> &'static str {
         (Kind::Smithing, 0) => "Smithing template",
         (Kind::Smithing, 1) => "Gear: armour, a weapon or a tool",
         (Kind::Smithing, _) => "Material: an ingot or a mineral",
+        (Kind::Stonecutter, _) => "Lay stone by the saw",
         (_, 0) => "A filled map goes here",
         _ => "Paper, glass or an empty map goes here",
     }
@@ -2532,6 +2552,7 @@ pub fn surface_refuse(kind: Kind) -> &'static str {
         Kind::Enchanting => "Only lapis lazuli fits here",
         Kind::Beacon => "A beacon takes only iron, gold, emerald, diamond or netherite",
         Kind::Loom => "The loom has no use for this",
+        Kind::Stonecutter => "The stonecutter has no use for this",
         _ => "The cartography table has no use for this",
     }
 }
@@ -3354,3 +3375,199 @@ pub static MAGIC_CIRCLE: [(u8, u8, u8, u8); 4099] = [(1,39,18,1), (2,35,4,1), (2
 pub const PIXEL_CIRCLE_SIZE: usize = 64;
 pub static PIXEL_CIRCLE: [(u8, u8, u8, u8); 664] = [(1,27,10,15), (2,23,4,15), (2,28,1,15), (2,35,1,15), (2,37,4,15), (3,20,3,15), (3,27,10,15), (3,41,3,15), (4,18,2,15), (4,22,5,15), (4,37,5,15), (4,44,2,15), (5,16,2,15), (5,20,3,15), (5,27,1,15), (5,30,1,15), (5,41,3,15), (5,46,2,15), (6,15,1,15), (6,18,2,15), (6,25,2,15), (6,30,1,15), (6,32,1,15), (6,37,1,15), (6,44,2,15), (6,48,1,15), (7,13,2,15), (7,16,2,15), (7,25,1,15), (7,30,1,15), (7,32,1,15), (7,36,2,15), (7,46,2,15), (7,49,2,15), (8,12,1,15), (8,15,2,15), (8,20,2,15), (8,25,1,15), (8,27,12,15), (8,42,1,15), (8,44,1,15), (8,47,2,15), (8,51,1,15), (9,11,1,15), (9,14,1,15), (9,21,2,15), (9,24,3,15), (9,31,3,15), (9,37,3,15), (9,41,1,15), (9,43,1,15), (9,49,1,15), (9,52,1,15), (10,10,1,15), (10,13,1,15), (10,16,1,15), (10,20,4,15), (10,27,5,15), (10,33,4,15), (10,40,3,15), (10,50,1,15), (10,53,1,15), (11,9,1,15), (11,11,2,15), (11,14,1,15), (11,16,1,15), (11,20,1,15), (11,24,3,15), (11,31,3,15), (11,37,3,15), (11,43,1,15), (11,49,1,15), (11,51,2,15), (11,54,1,15), (12,8,1,15), (12,11,1,15), (12,15,2,15), (12,18,2,15), (12,22,2,15), (12,31,1,15), (12,33,1,15), (12,40,2,15), (12,44,4,15), (12,52,1,15), (12,55,1,15), (13,7,1,15), (13,10,1,15), (13,17,1,15), (13,20,2,15), (13,30,1,15), (13,34,1,15), (13,42,2,15), (13,46,1,15), (13,48,1,15), (13,53,1,15), (13,56,1,15), (14,7,1,15), (14,9,1,15), (14,11,1,15), (14,16,1,15), (14,19,1,15), (14,30,1,15), (14,34,1,15), (14,44,1,15), (14,47,1,15), (14,52,1,15), (14,54,1,15), (14,56,1,15), (15,6,1,15), (15,8,1,15), (15,13,1,15), (15,15,1,15), (15,18,1,15), (15,29,1,15), (15,35,1,15), (15,45,1,15), (15,48,1,15), (15,51,1,15), (15,55,1,15), (15,57,1,15), (16,5,1,15), (16,7,2,15), (16,12,1,15), (16,14,1,15), (16,17,1,15), (16,28,1,15), (16,35,1,15), (16,46,1,15), (16,49,1,15), (16,51,3,15), (16,55,2,15), (16,58,1,15), (17,5,1,15), (17,7,1,15), (17,12,2,15), (17,16,1,15), (17,28,1,15), (17,36,1,15), (17,47,1,15), (17,50,1,15), (17,56,1,15), (17,58,1,15), (18,4,1,15), (18,6,1,15), (18,12,1,15), (18,15,1,15), (18,27,1,15), (18,37,1,15), (18,48,1,15), (18,51,1,15), (18,57,1,15), (18,59,1,15), (19,4,1,15), (19,6,1,15), (19,8,1,15), (19,12,1,15), (19,14,1,15), (19,27,1,15), (19,37,1,15), (19,49,1,15), (19,51,1,15), (19,57,1,15), (19,59,1,15), (20,3,1,15), (20,5,1,15), (20,9,1,15), (20,11,4,15), (20,26,1,15), (20,29,6,15), (20,38,1,15), (20,49,5,15), (20,55,1,15), (20,58,1,15), (20,60,1,15), (21,3,1,15), (21,5,1,15), (21,8,1,15), (21,10,1,15), (21,12,1,15), (21,14,36,15), (21,51,1,15), (21,53,3,15), (21,58,1,15), (21,60,1,15), (22,3,3,15), (22,9,2,15), (22,12,3,15), (22,25,1,15), (22,32,1,15), (22,38,2,15), (22,49,3,15), (22,53,2,15), (22,58,3,15), (23,2,1,15), (23,4,1,15), (23,10,1,15), (23,12,1,15), (23,14,1,15), (23,24,1,15), (23,28,1,15), (23,30,1,15), (23,32,2,15), (23,35,1,15), (23,39,1,15), (23,49,1,15), (23,51,1,15), (23,53,1,15), (23,59,1,15), (23,61,1,15), (24,2,1,15), (24,4,1,15), (24,9,1,15), (24,11,1,15), (24,15,1,15), (24,23,2,15), (24,29,1,15), (24,32,1,15), (24,34,1,15), (24,40,1,15), (24,48,1,15), (24,52,1,15), (24,54,1,15), (24,59,1,15), (24,61,1,15), (25,2,1,15), (25,4,1,15), (25,8,2,15), (25,11,1,15), (25,15,1,15), (25,22,2,15), (25,25,1,15), (25,27,1,15), (25,30,1,15), (25,32,1,15), (25,35,2,15), (25,38,1,15), (25,40,2,15), (25,48,1,15), (25,52,1,15), (25,54,4,15), (25,59,1,15), (25,61,1,15), (26,2,1,15), (26,4,1,15), (26,6,4,15), (26,11,1,15), (26,16,1,15), (26,21,3,15), (26,26,1,15), (26,32,1,15), (26,37,1,15), (26,40,3,15), (26,47,1,15), (26,52,1,15), (26,54,1,15), (26,57,1,15), (26,59,1,15), (26,61,1,15), (27,1,1,15), (27,3,1,15), (27,7,2,15), (27,10,1,15), (27,17,1,15), (27,21,2,15), (27,24,2,15), (27,27,1,15), (27,32,1,15), (27,38,2,15), (27,42,1,15), (27,47,1,15), (27,53,1,15), (27,55,1,15), (27,58,1,15), (27,60,1,15), (27,62,1,15), (28,1,3,15), (28,8,1,15), (28,10,1,15), (28,17,1,15), (28,21,1,15), (28,23,1,15), (28,25,3,15), (28,30,4,15), (28,36,3,15), (28,40,1,15), (28,42,1,15), (28,46,1,15), (28,53,1,15), (28,55,1,15), (28,60,3,15), (29,1,1,15), (29,3,1,15), (29,8,1,15), (29,10,1,15), (29,18,1,15), (29,20,2,15), (29,24,1,15), (29,28,2,15), (29,34,2,15), (29,39,1,15), (29,43,1,15), (29,45,1,15), (29,53,1,15), (29,55,1,15), (29,60,1,15), (29,62,1,15), (30,1,1,15), (30,3,1,15), (30,8,1,15), (30,10,1,15), (30,19,2,15), (30,25,1,15), (30,28,1,15), (30,35,1,15), (30,40,1,15), (30,43,1,15), (30,45,1,15), (30,53,1,15), (30,55,4,15), (30,60,1,15), (30,62,1,15), (31,1,1,15), (31,3,1,15), (31,7,2,15), (31,10,1,15), (31,19,2,15), (31,28,1,15), (31,35,1,15), (31,43,2,15), (31,53,1,15), (31,55,1,15), (31,60,1,15), (31,62,1,15), (32,1,1,15), (32,3,1,15), (32,5,4,15), (32,10,1,15), (32,19,2,15), (32,28,1,15), (32,35,1,15), (32,43,2,15), (32,53,1,15), (32,55,3,15), (32,60,1,15), (32,62,1,15), (33,1,1,15), (33,3,1,15), (33,8,1,15), (33,10,1,15), (33,18,1,15), (33,20,1,15), (33,23,1,15), (33,25,1,15), (33,28,1,15), (33,35,1,15), (33,38,1,15), (33,40,1,15), (33,43,1,15), (33,45,1,15), (33,53,1,15), (33,55,1,15), (33,60,1,15), (33,62,1,15), (34,1,1,15), (34,3,1,15), (34,8,1,15), (34,10,1,15), (34,18,1,15), (34,20,2,15), (34,24,1,15), (34,28,2,15), (34,34,2,15), (34,39,1,15), (34,42,2,15), (34,46,1,15), (34,53,1,15), (34,55,1,15), (34,60,1,15), (34,62,1,15), (35,1,3,15), (35,8,1,15), (35,10,1,15), (35,17,1,15), (35,21,2,15), (35,25,3,15), (35,30,4,15), (35,36,2,15), (35,40,1,15), (35,42,1,15), (35,46,1,15), (35,53,1,15), (35,55,1,15), (35,60,3,15), (36,1,1,15), (36,3,1,15), (36,5,1,15), (36,8,1,15), (36,10,1,15), (36,17,1,15), (36,21,2,15), (36,24,2,15), (36,27,1,15), (36,32,1,15), (36,36,1,15), (36,38,2,15), (36,41,2,15), (36,47,1,15), (36,53,1,15), (36,55,2,15), (36,60,1,15), (36,62,1,15), (37,2,1,15), (37,4,1,15), (37,6,1,15), (37,9,1,15), (37,11,1,15), (37,16,1,15), (37,21,3,15), (37,26,1,15), (37,32,1,15), (37,37,1,15), (37,40,3,15), (37,47,1,15), (37,52,1,15), (37,54,4,15), (37,59,1,15), (37,61,1,15), (38,2,1,15), (38,4,1,15), (38,6,4,15), (38,11,1,15), (38,15,1,15), (38,22,2,15), (38,27,2,15), (38,30,1,15), (38,32,2,15), (38,35,1,15), (38,38,1,15), (38,40,2,15), (38,48,1,15), (38,52,1,15), (38,54,2,15), (38,59,1,15), (38,61,1,15), (39,2,1,15), (39,4,1,15), (39,9,1,15), (39,11,1,15), (39,15,1,15), (39,23,2,15), (39,29,1,15), (39,32,1,15), (39,34,1,15), (39,40,1,15), (39,48,1,15), (39,52,1,15), (39,54,1,15), (39,59,1,15), (39,61,1,15), (40,2,1,15), (40,4,1,15), (40,10,1,15), (40,12,1,15), (40,14,1,15), (40,24,2,15), (40,30,1,15), (40,32,1,15), (40,35,1,15), (40,39,1,15), (40,49,1,15), (40,51,1,15), (40,53,1,15), (40,59,1,15), (40,61,1,15), (41,3,3,15), (41,9,2,15), (41,12,3,15), (41,25,1,15), (41,32,1,15), (41,38,1,15), (41,49,3,15), (41,53,2,15), (41,58,3,15), (42,3,1,15), (42,5,1,15), (42,8,3,15), (42,12,1,15), (42,14,36,15), (42,51,1,15), (42,53,1,15), (42,55,1,15), (42,58,1,15), (42,60,1,15), (43,3,1,15), (43,5,1,15), (43,8,1,15), (43,10,5,15), (43,26,1,15), (43,29,6,15), (43,37,1,15), (43,49,4,15), (43,54,1,15), (43,58,1,15), (43,60,1,15), (44,4,1,15), (44,6,1,15), (44,12,1,15), (44,14,1,15), (44,27,1,15), (44,37,1,15), (44,49,1,15), (44,51,1,15), (44,55,1,15), (44,57,1,15), (44,59,1,15), (45,4,1,15), (45,6,1,15), (45,12,1,15), (45,15,1,15), (45,28,1,15), (45,36,1,15), (45,48,1,15), (45,51,1,15), (45,57,1,15), (45,59,1,15), (46,5,1,15), (46,7,1,15), (46,13,1,15), (46,16,1,15), (46,28,1,15), (46,35,1,15), (46,47,1,15), (46,50,2,15), (46,56,1,15), (46,58,1,15), (47,5,1,15), (47,7,2,15), (47,10,3,15), (47,14,1,15), (47,17,1,15), (47,29,1,15), (47,35,1,15), (47,46,1,15), (47,49,1,15), (47,51,1,15), (47,55,2,15), (47,58,1,15), (48,6,1,15), (48,8,1,15), (48,12,1,15), (48,15,1,15), (48,18,1,15), (48,30,1,15), (48,34,1,15), (48,45,1,15), (48,48,1,15), (48,50,1,15), (48,55,1,15), (48,57,1,15), (49,7,1,15), (49,9,1,15), (49,11,1,15), (49,16,1,15), (49,19,1,15), (49,30,1,15), (49,34,1,15), (49,44,1,15), (49,47,1,15), (49,52,1,15), (49,54,1,15), (49,56,1,15), (50,7,1,15), (50,10,1,15), (50,15,1,15), (50,17,1,15), (50,20,2,15), (50,31,1,15), (50,33,1,15), (50,42,2,15), (50,46,1,15), (50,53,1,15), (50,56,1,15), (51,8,1,15), (51,11,1,15), (51,16,4,15), (51,22,2,15), (51,31,3,15), (51,40,2,15), (51,44,2,15), (51,47,2,15), (51,52,1,15), (51,55,1,15), (52,9,1,15), (52,11,2,15), (52,14,1,15), (52,20,1,15), (52,24,3,15), (52,31,1,15), (52,33,1,15), (52,37,3,15), (52,43,1,15), (52,47,1,15), (52,49,1,15), (52,51,2,15), (52,54,1,15), (53,10,1,15), (53,13,1,15), (53,21,3,15), (53,27,10,15), (53,40,4,15), (53,47,1,15), (53,50,1,15), (53,53,1,15), (54,11,1,15), (54,14,1,15), (54,20,1,15), (54,22,1,15), (54,24,3,15), (54,37,3,15), (54,41,2,15), (54,49,1,15), (54,52,1,15), (55,12,1,15), (55,15,2,15), (55,19,1,15), (55,21,1,15), (55,25,12,15), (55,38,1,15), (55,42,2,15), (55,47,2,15), (55,51,1,15), (56,13,2,15), (56,16,2,15), (56,26,2,15), (56,30,1,15), (56,32,1,15), (56,38,1,15), (56,46,2,15), (56,49,2,15), (57,15,1,15), (57,18,2,15), (57,26,1,15), (57,32,1,15), (57,37,2,15), (57,44,2,15), (57,48,1,15), (58,16,2,15), (58,20,3,15), (58,32,1,15), (58,36,1,15), (58,41,3,15), (58,46,2,15), (59,18,2,15), (59,22,5,15), (59,37,5,15), (59,44,2,15), (60,20,3,15), (60,27,10,15), (60,41,3,15), (61,23,4,15), (61,28,1,15), (61,35,1,15), (61,37,4,15), (62,27,10,15)];
 // FX-DATA-END
+
+// ------------------------------------------------------------------ the crafter
+
+/// The crafter is worked like the crafting table: its nine windows are the cells on its top (the
+/// same 2-pixel openings 3 pixels apart), what lies in them stands on the window, a shut window
+/// has a lid over it, and what it would craft floats over the far edge.
+pub fn is_crafter() -> bool {
+    state().kind == Kind::Crafter
+}
+
+/// The panel's slot or a window (the crafter's slots, 300 on); the floating result is not taken.
+pub fn crafter_slot_at(w: f32, h: f32, x: f32, y: f32, seconds: f64) -> Option<usize> {
+    let e = expanded();
+    if inside(panel(w, e), x, y) {
+        return panel_slot(w, x, y, e);
+    }
+    match hover(ndc((x, y), w, h), seconds)? {
+        Hover::Cell(i) => Some(300 + i),
+        _ => None,
+    }
+}
+
+pub const CRAFTER_SHUT: &str = "This window is shut";
+pub const CRAFTER_OPEN_IT: &str = "Click with an empty hand \u{2014} open it";
+pub const CRAFTER_SHUT_IT: &str = "Click with an empty hand \u{2014} shut this window";
+
+/// A shut window's lid: a light plate over the cell, lit on its far and left edges, shaded on the
+/// near and right ones (the crafter's disabled slot).
+pub fn lid_quads(t: [i32; 3], yaw: f32, i: usize) -> Vec<([DVec3; 4], u32)> {
+    let c = cell_center(t, yaw, i) + DVec3::Y * 0.004;
+    let (r, f) = (right(yaw), forward(yaw));
+    let a = 1.42 * PX;
+    let w = 0.22 * PX;
+    let q = |x0: f64, z0: f64, x1: f64, z1: f64, lift: f64| {
+        let o = c + DVec3::Y * lift;
+        [o + r * x0 + f * z0, o + r * x1 + f * z0, o + r * x1 + f * z1, o + r * x0 + f * z1]
+    };
+    let rgb = |v: [u8; 3]| u32::from_le_bytes([v[0], v[1], v[2], 255]);
+    vec![
+        (q(-a, -a, a, a, 0.0), rgb([194, 194, 194])),
+        // Far edge and left edge: the light rim.
+        (q(-a, a - w, a, a, 0.0005), rgb([240, 236, 238])),
+        (q(-a, -a, -a + w, a, 0.0005), rgb([240, 236, 238])),
+        // Near edge and right edge: the shade.
+        (q(-a + w, -a, a, -a + w, 0.0005), rgb([132, 130, 131])),
+        (q(a - w, -a + w, a, a - w, 0.0005), rgb([132, 130, 131])),
+    ]
+}
+
+// ------------------------------------------------------------------ the stonecutter
+
+/// The stone lies by the saw: on the top, left of the blade and a little towards the player.
+pub const STONECUTTER_SPOTS: [Spot; 1] = [Spot { slot: 0, x: -0.31, z: -0.08, r: 0.16, y: -0.4375 }];
+
+/// How many shapes stand round the blade at once (the wheel shows the next ones).
+pub const STONE_PAGE: usize = 12;
+/// The ring of shapes: round the blade's hub, in the plane that faces the camera.
+pub const STONE_RING: f64 = 0.62;
+/// The angle between two shapes on the ring (degrees), and the size of a shape.
+pub const STONE_STEP: f64 = 16.0;
+pub const STONE_SIZE: f32 = 0.19;
+pub const STONE_CUT: &str = "LMB \u{2014} cut one  \u{b7}  Shift \u{2014} cut the whole stack";
+pub const STONE_BUSY: &str = "Your hand holds something else \u{2014} put it away first";
+
+pub fn stone_page() -> usize {
+    state().stone_page
+}
+
+/// The wheel over the stonecutter: the next (or the previous) shapes, `total` in all.
+pub fn stone_scroll(delta: f32, total: usize) {
+    let mut s = state();
+    if total <= STONE_PAGE {
+        s.stone_page = 0;
+        return;
+    }
+    let last = total - STONE_PAGE;
+    s.stone_page = if delta < 0.0 { (s.stone_page + 4).min(last) } else { s.stone_page.saturating_sub(4) };
+}
+
+/// The shapes shown: the indices into the menu's recipe list, from the page on.
+pub fn stone_shown(total: usize) -> std::ops::Range<usize> {
+    let mut s = state();
+    if s.stone_page >= total {
+        s.stone_page = 0;
+    }
+    s.stone_page..(s.stone_page + STONE_PAGE).min(total)
+}
+
+/// Where the `k`th of `n` shapes floats: on a ring round the blade's hub (just under the top's
+/// height) in the plane facing the camera, from the left over the top to the right, swaying a little.
+pub fn stone_point(t: [i32; 3], yaw: f32, k: usize, n: usize, seconds: f64) -> DVec3 {
+    let hub = top_center(t) - DVec3::Y * (0.4375 + 0.045);
+    let pitch = Kind::Stonecutter.rig();
+    let tilt = (pitch.up - pitch.look_up).atan2(pitch.back - pitch.look_back);
+    let up = DVec3::Y * tilt.cos() + forward(yaw) * tilt.sin();
+    let span = STONE_STEP * (n.max(1) - 1) as f64;
+    let a = (90.0 + span * 0.5 - STONE_STEP * k as f64).to_radians();
+    let sway = 0.012 * (seconds * 1.3 + k as f64 * 0.7).sin();
+    hub + right(yaw) * (STONE_RING * a.cos()) + up * (STONE_RING * a.sin() + sway)
+}
+
+/// The shape under the cursor (its place among the `n` shown), the nearest within reach.
+pub fn stone_at(n: (f32, f32), shown: usize, seconds: f64) -> Option<usize> {
+    let (pose, t, yaw, lens) = {
+        let s = state();
+        if s.phase != Phase::Inside || s.kind != Kind::Stonecutter {
+            return None;
+        }
+        (s.last?, s.table, s.yaw, s.lens)
+    };
+    let mut best: Option<(f32, usize)> = None;
+    for k in 0..shown {
+        let Some(p) = project(pose, stone_point(t, yaw, k, shown, seconds), lens.0, lens.1) else {
+            continue;
+        };
+        let (dx, dy) = ((p.0 - n.0) * lens.1, p.1 - n.1);
+        let d = dx * dx + dy * dy;
+        if d < 0.085 * 0.085 && best.is_none_or(|b| d < b.0) {
+            best = Some((d, k));
+        }
+    }
+    best.map(|b| b.1)
+}
+
+/// The hand that reaches for a shape, and where it stops: a little short of it.
+pub fn stone_reach(t: [i32; 3], yaw: f32, k: usize, n: usize, seconds: f64) -> (usize, DVec3) {
+    let p = stone_point(t, yaw, k, n, seconds);
+    let side = usize::from((p - top_center(t)).dot(right(yaw)) >= 0.0);
+    (side, p - forward(yaw) * 0.09 - DVec3::Y * 0.03)
+}
+
+/// The arms at the stonecutter: resting, or one reaching for the shape under the cursor.
+pub fn step_stone_hands(target: Option<(usize, DVec3)>, now: Instant, seconds: f64) -> Option<[[DVec3; 2]; 2]> {
+    let (t, yaw) = {
+        let s = state();
+        (s.table, s.yaw)
+    };
+    let sway = [
+        DVec3::new(0.0, 0.003 * (seconds * 1.7).sin(), 0.0),
+        DVec3::new(0.0, 0.003 * (seconds * 1.5 + 2.0).sin(), 0.0),
+    ];
+    let mut targets = [surface_rest(Kind::Stonecutter, 0, t, yaw) + sway[0], surface_rest(Kind::Stonecutter, 1, t, yaw) + sway[1]];
+    let reaching = target.map(|(side, p)| {
+        targets[side] = p;
+        side
+    });
+    step_hands_to(targets, reaching, now)
+}
+
+// ------------------------------------------------------------------ the anvil's new name
+
+pub fn renaming() -> bool {
+    state().renaming
+}
+
+pub fn set_renaming(on: bool) {
+    state().renaming = on;
+}
+
+pub fn set_name_rect(rect: Option<[f32; 4]>) {
+    state().name_rect = rect;
+}
+
+/// The cursor is over the anvil's floating name.
+pub fn on_name(x: f32, y: f32) -> bool {
+    state().name_rect.is_some_and(|r| inside(r, x, y))
+}
+
+pub const NAME_CLICK: &str = "Click \u{2014} give it a new name";
+pub const NEW_NAME: &str = "New name";
+
+/// The rename box: low in the middle of the screen, over the hints.
+pub fn name_box(w: f32, h: f32) -> [f32; 4] {
+    [(w * 0.5 - 76.0).floor(), (h - 53.0).floor(), 152.0, 22.0]
+}
+
+// ------------------------------------------------------------------ the stations' tooltips
+
+/// The jar's line under the item on the worked spot (gold: what a click does).
+pub fn work_effect(kind: Kind) -> Option<&'static str> {
+    match kind {
+        Kind::Grindstone => Some("\u{a7}dEnchantments come off (curses stay), a little experience returns"),
+        _ => None,
+    }
+}
+
+pub const TAKE_BACK: &str = "Click to take it back";
+
+pub fn brewing_fuel_text(fuel: i32) -> String {
+    format!("Fuel left for {fuel} brews")
+}
+
+/// Whether the station's tooltip puts an empty line between the item and the station's lines.
+pub fn tooltip_gap(kind: Kind) -> bool {
+    !matches!(kind, Kind::Brewing | Kind::Enchanting | Kind::Beacon | Kind::Stonecutter)
+}

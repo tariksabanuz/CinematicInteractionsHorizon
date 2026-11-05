@@ -12,6 +12,8 @@
     "crates/horizon-client/src/game/fov.rs": "a7cd690790f54e131c3a0251261b8779d1114429bf22f6c226745cdb0da95450",
     "crates/horizon-client/src/game/native_hooks.rs": "14499fd0c9c8af48dd8ac5d09b0339bd1766461a7e7911143c5ac45e017334c4",
     "crates/horizon-client/src/game/recipe_book.rs": "d3d8d8eb7a63e52ed53ff84a1ac492a4244ffa9ed709c4e7a9947028b9d97106",
-    "crates/horizon-client/src/client_lib.rs": "7f6233fd6dd70e055470b80ccf4614049f5b96e0a9fba7d95a07e547d0fc555d"
+    "crates/horizon-client/src/client_lib.rs": "7f6233fd6dd70e055470b80ccf4614049f5b96e0a9fba7d95a07e547d0fc555d",
+    "crates/horizon-client/src/game/stations.rs": "8cd1036e26afaf1e215ed5485688ef407d0b1cf48aa695f748afe95be4f18b14",
+    "crates/horizon-client-render/src/gfx/reuse.rs": "f418314fe469fcaaa24c2ddcfab417be542029d58de3f44e2ca1b23927cb4764"
   }
 }

@@ -8,8 +8,9 @@ fn cinematic_hands(game: &mut crate::game::Game<'_>, alpha: f64) -> ::core::ops:
     use horizon_assets::item_model::DisplayContext;
     let furnace = ci::is_furnace(ci::kind());
     let surface = ci::is_surface(ci::kind());
+    let crafter = ci::is_crafter();
     // On the walk to the table the game's own hand shows, bobbing.
-    if !ci::shown() || !(ci::table_scene() || furnace || surface) || ci::walking(std::time::Instant::now()) {
+    if !ci::shown() || !(ci::table_scene() || crafter || furnace || surface) || ci::walking(std::time::Instant::now()) {
         return ::core::ops::ControlFlow::Continue(());
     }
     let Some(pose) = ci::view_pose() else {
@@ -34,13 +35,36 @@ fn cinematic_hands(game: &mut crate::game::Game<'_>, alpha: f64) -> ::core::ops:
     let mut hover = None;
     let mut zone = None;
     let mut spot = None;
+    // The stonecutter's shapes: what each recipe of the stone makes, the page of them shown, and the
+    // one under the cursor.
+    let mut shapes: Vec<horizon_client::items::ItemStack> = Vec::new();
+    let mut shape = None;
+    if surface && ci::kind() == ci::Kind::Stonecutter
+        && let Some(st) = game.station.as_ref()
+        && st.inputs.first().is_some_and(|i| i.is_some())
+    {
+        let all: Vec<horizon_client::items::ItemStack> = st.stone.recipes.iter().filter_map(|r| game.stations().recipes.stonecutting.get(*r).map(|c| c.result.clone())).collect();
+        let range = ci::stone_shown(all.len());
+        shapes = all[range].to_vec();
+        shape = if over_panel { None } else { ci::stone_at(cursor, shapes.len(), seconds) };
+    }
     let arms = if furnace {
         zone = if over_panel { None } else { ci::furnace_hover(cursor) };
         ci::step_furnace_hands(zone, now, seconds)
     } else if surface {
         ci::set_result_shown(game.slot_view(650).is_some());
         spot = if over_panel { None } else { ci::surface_hover(cursor) };
-        ci::step_surface_hands(spot, now, seconds)
+        if ci::kind() == ci::Kind::Stonecutter && shape.is_some() {
+            ci::step_stone_hands(shape.map(|k| ci::stone_reach(table, yaw, k, shapes.len(), seconds)), now, seconds)
+        } else {
+            ci::step_surface_hands(spot, now, seconds)
+        }
+    } else if crafter {
+        // The crafter: its windows are the cells; what it would craft floats, not to be taken.
+        result = game.crafter_result();
+        ci::set_result_shown(false);
+        hover = ci::hover(cursor, seconds);
+        ci::step_hands(hover, now, seconds)
     } else {
         result = game.slot_view(200);
         ci::set_result_shown(result.is_some());
@@ -149,11 +173,62 @@ fn cinematic_hands(game: &mut crate::game::Game<'_>, alpha: f64) -> ::core::ops:
             };
             game.submit_item_world(&state, matrix, item_light, &mut out);
         }
+        // The stonecutter's shapes, round the blade; the one under the cursor a little bigger.
+        for (k, stack) in shapes.iter().enumerate() {
+            let block = game.items().get(&stack.item).is_some_and(|info| info.block.is_some());
+            let at = ci::stone_point(table, yaw, k, shapes.len(), seconds);
+            let size = ci::STONE_SIZE * if shape == Some(k) { 1.15 } else { 1.0 } * presence.max(0.001);
+            let spin = k as f32 * 33.0 + (seconds * 12.0) as f32;
+            let state = game.resolve_item(stack, DisplayContext::Fixed, None, 80 + k as i32);
+            let matrix = if block {
+                ci::item_matrix(fix(at - glam::DVec3::Y * f64::from(size * 0.5)), yaw, true, size, spin)
+            } else {
+                ci::item_upright(fix(at), yaw, size * 1.8, spin)
+            };
+            game.submit_item_world(&state, matrix, item_light, &mut out);
+        }
         if let Some(slot) = spot
+            && shape.is_none()
             && kind != ci::Kind::Shelf
             && let Some(s) = ci::surface_spots(kind).iter().find(|s| s.slot == slot)
         {
             for q in ci::spot_frame(s, table, yaw) {
+                quads.push((q, u32::from_le_bytes([236, 226, 196, 255])));
+            }
+        }
+    } else if crafter {
+        // The crafter: what lies in each open window, a lid on each shut one, the frame round the
+        // window under the cursor, and what it would craft floating over the far edge.
+        let disabled = match game.world.block_entities.get(&(table[0], table[1], table[2])) {
+            Some(horizon_client::containers::BlockEntity::Crafter(c)) => c.disabled,
+            _ => [false; 9],
+        };
+        for i in 0..9 {
+            if disabled[i] {
+                quads.extend(ci::lid_quads(table, yaw, i));
+                continue;
+            }
+            let Some(stack) = game.slot_view(300 + i) else {
+                continue;
+            };
+            let block = game.items().get(&stack.item).is_some_and(|info| info.block.is_some());
+            let at = fix(ci::cell_center(table, yaw, i));
+            let state = game.resolve_item(&stack, DisplayContext::Fixed, None, i as i32);
+            game.submit_item_world(&state, ci::item_matrix(at, yaw, block, 0.18 * presence.max(0.001), 0.0), item_light, &mut out);
+        }
+        if let Some(stack) = result.as_ref()
+            && ci::phase() == ci::Phase::Inside
+        {
+            let block = game.items().get(&stack.item).is_some_and(|info| info.block.is_some());
+            let at = fix(ci::result_spot(table, yaw, seconds)) - glam::Vec3::Y * 0.1;
+            let state = game.resolve_item(stack, DisplayContext::Fixed, None, 9);
+            let m = glam::Mat4::from_translation(at + glam::Vec3::Y * 0.1)
+                * glam::Mat4::from_rotation_y((seconds as f32 * 60.0).to_radians())
+                * glam::Mat4::from_scale(glam::Vec3::splat(if block { 0.4 } else { 0.45 }));
+            game.submit_item_world(&state, m, item_light, &mut out);
+        }
+        if let Some(ci::Hover::Cell(i)) = hover {
+            for q in ci::frame_quads(ci::cell_center(table, yaw, i), yaw) {
                 quads.push((q, u32::from_le_bytes([236, 226, 196, 255])));
             }
         }

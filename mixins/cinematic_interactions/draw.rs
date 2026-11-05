@@ -117,6 +117,59 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
     // SmithingStation and CartographyStation in the scene: the panel, the hint and, over a spot,
     // what goes there (gold), what lies there and, on the worked spot, what it makes; a stack
     // the spot can't take is refused in red.
+    // The crafter in the scene: the panel, its hint and, over a window, what lies in it (and that a
+    // click takes it), that it is shut (and that an empty hand opens it), or that an empty hand
+    // shuts it.
+    fn draw_crafter(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) {
+        use horizon_client_lib::native_cinematic_interactions_scene as ci;
+        use horizon_client::text::Text;
+        let (x, y) = game.cursor;
+        let expanded = ci::update_expanded(batch.width, x, y);
+        let hovered = game.slot_at(batch, x, y).filter(|s| *s < 36);
+        ci::draw_panel(batch, &game.gui.atlas, expanded, game.selected, hovered);
+        for i in 0..if expanded { 36 } else { 9 } {
+            if let Some(stack) = game.inventory.get(i).cloned().flatten() {
+                let (sx, sy) = ci::slot_pos(batch.width, i);
+                game.draw_item(batch, &stack, sx, sy);
+            }
+        }
+        if ci::config().hints {
+            ci::draw_hint_line(batch, &game.gui.atlas, ci::station_hint(ci::Kind::Crafter));
+        }
+        let seconds = game.started.elapsed().as_secs_f64();
+        let on_panel = ci::on_panel(batch.width, x, y);
+        let cell = if on_panel { None } else { ci::hover(ci::ndc((x, y), batch.width, batch.height), seconds) };
+        draw_neighbour(game, batch, matches!(cell, Some(ci::Hover::Cell(_))));
+        if on_panel {
+            game.draw_carried(batch);
+            game.draw_slot_tooltip(batch);
+            return;
+        }
+        let Some(ci::Hover::Cell(i)) = cell else {
+            return;
+        };
+        let t = ci::table().0;
+        let shut = match game.world.block_entities.get(&(t[0], t[1], t[2])) {
+            Some(horizon_client::containers::BlockEntity::Crafter(c)) => c.disabled[i],
+            _ => false,
+        };
+        let held = game.slot_view(300 + i);
+        let mut lines: Vec<(Text, u32)> = Vec::new();
+        if shut {
+            lines.push((Text::literal(format!("\u{a7}c{}", ci::CRAFTER_SHUT)), u32::MAX));
+            lines.push((Text::literal(format!("\u{a7}7{}", ci::CRAFTER_OPEN_IT)), u32::MAX));
+        } else if let Some(stack) = held.as_ref() {
+            if game.carried.is_none() {
+                lines.extend(game.stack_tooltip(stack));
+                lines.push((Text::literal(format!("\u{a7}7{}", ci::SURFACE_TAKE)), u32::MAX));
+            }
+        } else if game.carried.is_none() {
+            lines.push((Text::literal(format!("\u{a7}7{}", ci::CRAFTER_SHUT_IT)), u32::MAX));
+        }
+        if !lines.is_empty() {
+            game.draw_tooltip_lines(batch, &lines, x, y);
+        }
+    }
     fn draw_surface(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) {
         use horizon_client_lib::native_cinematic_interactions_scene as ci;
         use horizon_client::text::Text;
@@ -215,26 +268,68 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
             }
         }
         // The anvil: the name of what lies on it floats above, with the cost of the work in green.
+        // Over the name a pencil shows and a click opens the "New name" box low in the middle of the
+        // screen (typing goes to it until Enter or Esc).
+        ci::set_name_rect(None);
         if kind == ci::Kind::Anvil
             && let Some(st) = game.station.as_ref()
         {
             let shown = st.result.clone().or_else(|| st.inputs.first().cloned().flatten());
             let cost = st.anvil.cost;
+            let renamed = st.result.is_some();
+            let field = (st.rename.value.clone(), st.rename.cursor, st.rename.highlight, st.rename.cursor_visible());
             if let Some(stack) = shown
                 && let Some((sx, sy)) = ci::screen_of(ci::spot_point(t, yaw, &ci::ANVIL_SPOTS[0]) + glam::DVec3::Y * 0.2, batch.width, batch.height)
             {
                 let atlas = &game.gui.atlas;
-                let label = ci::plain_name(&horizon_client::item_tooltip::name_line(&stack, &|k| game.pack.names.display_get(k)));
+                let plain = ci::plain_name(&horizon_client::item_tooltip::name_line(&stack, &|k| game.pack.names.display_get(k)));
+                let bare = HudBatch::text_width(atlas, &plain);
+                let rect = [sx - bare * 0.7 - 12.0, sy - 8.4, bare * 1.4 + 12.0, 11.2];
+                let on = over && !ci::renaming() && x >= rect[0] && x <= rect[0] + rect[2] && y >= rect[1] && y <= rect[1] + rect[3];
+                ci::set_name_rect(Some(rect));
+                let label = if on { format!("\u{a7}e\u{270e} \u{a7}f{plain}") } else { plain.clone() };
                 let w = HudBatch::text_width(atlas, &label);
+                let color = if on || !renamed { rgba(255, 255, 255, 255) } else { rgba(255, 221, 102, 255) };
                 let start = batch.vertices.len();
-                batch.text(atlas, &label, sx - w * 0.5, sy - 6.0, rgba(255, 255, 255, 255), true);
+                batch.text(atlas, &label, sx - w * 0.5, sy - 6.0, color, true);
                 batch.scale_since(start, sx, sy, 1.4, 1.4);
-                if cost > 0 && st.result.is_some() {
+                if cost > 0 && renamed {
                     let text = cost.to_string();
                     let cw = HudBatch::text_width(atlas, &text);
                     let start = batch.vertices.len();
                     batch.text(atlas, &text, sx - cw * 0.5, sy - 26.0, if game.creative || game.experience.level >= cost { rgba(128, 255, 32, 255) } else { rgba(255, 85, 85, 255) }, true);
                     batch.scale_since(start, sx, sy - 22.0, 2.0, 2.0);
+                }
+                if on {
+                    extra = Some(vec![(Text::literal(format!("\u{a7}7{}", ci::NAME_CLICK)), u32::MAX)]);
+                }
+            }
+            // The rename box: "New name" over the field, the text selected when it opens.
+            if ci::renaming() {
+                let atlas = &game.gui.atlas;
+                let [bx, by, bw, bh] = ci::name_box(batch.width, batch.height);
+                batch.fill(atlas, bx, by, bw, bh, rgba(0, 0, 0, 128));
+                batch.fill(atlas, bx, by + bh * 0.55, bw, bh * 0.45, rgba(0, 0, 0, 40));
+                batch.fill(atlas, bx, by + bh - 1.0, bw, 1.0, rgba(196, 160, 72, 255));
+                ci::scaled_text(batch, atlas, ci::NEW_NAME, bx + 3.0, by + 2.5, 0.7, rgba(150, 150, 150, 255));
+                let (value, cursor, highlight, blink) = field;
+                let chars: Vec<char> = value.chars().collect();
+                let (a, b) = (cursor.min(highlight).min(chars.len()), cursor.max(highlight).min(chars.len()));
+                let (tx, ty, k) = (bx + 3.0, by + 11.5, 0.7);
+                let before: String = chars[..a].iter().collect();
+                let picked: String = chars[a..b].iter().collect();
+                let after: String = chars[b..].iter().collect();
+                let wa = HudBatch::text_width(atlas, &before) * k;
+                let wp = HudBatch::text_width(atlas, &picked) * k;
+                ci::scaled_text(batch, atlas, &before, tx, ty, k, rgba(255, 255, 255, 255));
+                if !picked.is_empty() {
+                    batch.fill(atlas, tx + wa, ty - 0.5, wp, 7.0, rgba(255, 255, 255, 255));
+                    ci::scaled_text(batch, atlas, &picked, tx + wa, ty, k, rgba(0, 0, 255, 255));
+                }
+                ci::scaled_text(batch, atlas, &after, tx + wa + wp, ty, k, rgba(255, 255, 255, 255));
+                if picked.is_empty() && blink {
+                    let wc = HudBatch::text_width(atlas, &chars[..cursor.min(chars.len())].iter().collect::<String>()) * k;
+                    ci::scaled_text(batch, atlas, "_", tx + wc, ty, k, rgba(255, 255, 255, 255));
                 }
             }
         }
@@ -315,7 +410,12 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
             if display {
                 let tip = game.draw_loom(batch, ox, oy, (x - ox, y - oy));
                 if over && ci::on_loom_board(batch.width, batch.height, x, y) {
-                    extra = tip;
+                    // LoomStation: the pattern's name, then what a click does (gold).
+                    extra = tip.map(|mut lines| {
+                        lines.truncate(1);
+                        lines.push((Text::literal(format!("\u{a7}6{}", ci::surface_work(kind))), u32::MAX));
+                        lines
+                    });
                 }
             } else if banner {
                 let atlas = &game.gui.atlas;
@@ -351,6 +451,40 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
                     }
                 }
                 _ => {}
+            }
+        }
+        // The stonecutter: under each shape how many a cut gives ("\u{d7}2"); over a shape its name and
+        // what a click does, or that the hand holds something else.
+        if kind == ci::Kind::Stonecutter
+            && let Some(st) = game.station.as_ref()
+            && st.inputs.first().is_some_and(|i| i.is_some())
+        {
+            let all: Vec<ItemStack> = st.stone.recipes.iter().filter_map(|r| game.stations().recipes.stonecutting.get(*r).map(|c| c.result.clone())).collect();
+            let range = ci::stone_shown(all.len());
+            let shapes = all[range].to_vec();
+            let seconds = game.started.elapsed().as_secs_f64();
+            let hovered = if over { ci::stone_at(ci::ndc((x, y), batch.width, batch.height), shapes.len(), seconds) } else { None };
+            let atlas = &game.gui.atlas;
+            for (k, stack) in shapes.iter().enumerate() {
+                if stack.count <= 1 {
+                    continue;
+                }
+                let p = ci::stone_point(t, yaw, k, shapes.len(), seconds);
+                if let (Some((sx, _)), Some((_, ly))) = (ci::screen_of(p, batch.width, batch.height), ci::screen_of(p - glam::DVec3::Y * 0.11, batch.width, batch.height)) {
+                    let label = format!("\u{d7}{}", stack.count);
+                    let lw = HudBatch::text_width(atlas, &label);
+                    batch.text(atlas, &label, sx - lw * 0.5 + 3.0, ly, rgba(255, 255, 255, 255), true);
+                }
+            }
+            if let Some(k) = hovered {
+                let stack = &shapes[k];
+                let named = horizon_client::item_tooltip::name_line(stack, &|key| game.pack.names.display_get(key));
+                let title = if stack.count > 1 { format!("{named} \u{d7}{}", stack.count) } else { named };
+                let busy = game.carried.as_ref().is_some_and(|c| c.item != stack.item);
+                extra = Some(vec![
+                    (Text::literal(title), u32::MAX),
+                    (Text::literal(if busy { format!("\u{a7}c{}", ci::STONE_BUSY) } else { format!("\u{a7}6{}", ci::STONE_CUT) }), u32::MAX),
+                ]);
             }
         }
         let busy = extra.is_some() || ci::surface_hover(ci::ndc((x, y), batch.width, batch.height)).is_some();
@@ -433,58 +567,92 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
         let held = game.slot_view(ci::spot_base(kind) + slot);
         let result = game.slot_view(650);
         let mut lines: Vec<(Text, u32)> = Vec::new();
-        if game.carried.is_some() {
+        let counted = |game: &crate::game::Game<'_>, stack: &ItemStack| {
+            let n = name(game, stack);
+            if stack.count > 1 { format!("{n} \u{d7}{}", stack.count) } else { n }
+        };
+        if let Some(c) = game.carried.clone() {
             if held.is_none() && !game.quick_craft_accepts(ci::spot_base(kind) + slot, 0, 0) {
                 lines.push((Text::literal(format!("\u{a7}c{}", ci::surface_refuse(kind))), u32::MAX));
             } else {
+                // What the hand would lay there.
+                lines.extend(game.stack_tooltip(&c));
+            }
+        } else if let Some(stack) = held.as_ref() {
+            if kind == ci::Kind::Beacon {
                 lines.push((Text::literal(format!("\u{a7}6{}", ci::spot_title(kind, slot))), u32::MAX));
-            }
-        } else {
-            lines.push((Text::literal(format!("\u{a7}6{}", ci::spot_title(kind, slot))), u32::MAX));
-            if let Some(stack) = held.as_ref() {
-                lines.push((Text::literal(format!("{} \u{d7}{}", name(game, stack), stack.count)), u32::MAX));
-            }
-            if kind == ci::Kind::Beacon && held.is_some() {
+                lines.push((Text::literal(counted(game, stack)), u32::MAX));
                 let chosen = game.station.as_ref().is_some_and(|s| s.beacon[0].is_some());
                 lines.push((Text::literal(if chosen { "\u{a7}aClick \u{2014} light the beacon" } else { "\u{a7}eChoose a power over the beacon first" }), u32::MAX));
                 lines.push((Text::literal("\u{a7}7Right-click \u{2014} take it"), u32::MAX));
-            } else if ci::has_work(kind) && slot == ci::work_spot(kind) {
-                match (result.as_ref(), kind) {
-                    (Some(made), ci::Kind::Smithing) => {
-                        lines.push((Text::literal(format!("\u{a7}aMakes: {}", ci::plain_name(&name(game, made)))), u32::MAX));
-                        lines.push((Text::literal(format!("\u{a7}7{}", ci::surface_work(kind))), u32::MAX));
+            } else if kind == ci::Kind::Enchanting && slot == 1 {
+                // The lapis in its rune: how much lies there.
+                lines.push((Text::literal(counted(game, stack)), u32::MAX));
+            } else if kind == ci::Kind::Stonecutter {
+                lines.push((Text::literal(counted(game, stack)), u32::MAX));
+                lines.push((Text::literal(format!("\u{a7}7{}", ci::SURFACE_TAKE)), u32::MAX));
+            } else {
+                // The item's own tooltip, then the station's lines.
+                lines.extend(game.stack_tooltip(stack));
+                match kind {
+                    ci::Kind::Enchanting => {
+                        lines.push((Text::literal(format!("\u{a7}7{}", ci::TAKE_BACK)), u32::MAX));
                     }
-                    (Some(made), ci::Kind::Anvil) => {
-                        let cost = game.station.as_ref().map_or(0, |s| s.anvil.cost);
-                        lines.push((Text::literal(format!("\u{a7}7{}", ci::plain_name(&name(game, made)))), u32::MAX));
-                        if cost > 0 {
-                            lines.push((Text::literal(format!("\u{a7}aEnchantment Cost: {cost}")), u32::MAX));
+                    ci::Kind::Brewing => {
+                        if slot == 4 {
+                            let t = ci::table().0;
+                            let fuel = match game.world.block_entities.get(&(t[0], t[1], t[2])) {
+                                Some(horizon_client::containers::BlockEntity::Brewing(b)) => b.fuel,
+                                _ => 0,
+                            };
+                            lines.push((Text::literal(format!("\u{a7}6{}", ci::brewing_fuel_text(fuel))), u32::MAX));
                         }
-                        lines.push((Text::literal(format!("\u{a7}7{}", ci::surface_work(kind))), u32::MAX));
+                        lines.push((Text::literal(format!("\u{a7}7{}", ci::SURFACE_TAKE)), u32::MAX));
                     }
-                    (Some(_), ci::Kind::Grindstone) => {
-                        lines.push((Text::literal(format!("\u{a7}7{}", ci::surface_work(kind))), u32::MAX));
-                    }
-                    (Some(_), _) => {
-                        let addition = game.slot_view(601).map(|s| s.item.to_string()).unwrap_or_default();
-                        lines.push((Text::literal(format!("\u{a7}a{}", ci::cartography_effect(&addition))), u32::MAX));
-                        lines.push((Text::literal(format!("\u{a7}7{}", ci::surface_work(kind))), u32::MAX));
-                    }
-                    (None, ci::Kind::Smithing) if held.is_some() => {
-                        for other in [0usize, 2] {
-                            if game.slot_view(600 + other).is_none() {
-                                lines.push((Text::literal(format!("\u{a7}e{}", ci::smithing_missing(other))), u32::MAX));
+                    _ => {
+                        if ci::tooltip_gap(kind) {
+                            lines.push((Text::literal(""), u32::MAX));
+                        }
+                        match (result.as_ref(), kind) {
+                            (Some(made), ci::Kind::Smithing) => {
+                                lines.push((Text::literal(format!("\u{a7}7Makes: {}", ci::plain_name(&name(game, made)))), u32::MAX));
+                                lines.push((Text::literal(format!("\u{a7}6{}", ci::surface_work(kind))), u32::MAX));
+                            }
+                            (Some(_), ci::Kind::Anvil) => {
+                                let cost = game.station.as_ref().map_or(0, |s| s.anvil.cost);
+                                if cost > 0 {
+                                    lines.push((Text::literal(format!("\u{a7}aEnchantment Cost: {cost}")), u32::MAX));
+                                }
+                                lines.push((Text::literal(format!("\u{a7}6{}", ci::surface_work(kind))), u32::MAX));
+                            }
+                            (Some(_), ci::Kind::Cartography) => {
+                                let addition = game.slot_view(601).map(|s| s.item.to_string()).unwrap_or_default();
+                                lines.push((Text::literal(format!("\u{a7}7{}", ci::cartography_effect(&addition))), u32::MAX));
+                                lines.push((Text::literal(format!("\u{a7}6{}", ci::surface_work(kind))), u32::MAX));
+                            }
+                            (Some(_), _) => {
+                                if let Some(effect) = ci::work_effect(kind) {
+                                    lines.push((Text::literal(effect), u32::MAX));
+                                }
+                                lines.push((Text::literal(format!("\u{a7}6{}", ci::surface_work(kind))), u32::MAX));
+                            }
+                            (None, _) => {
+                                // SmithingStation: what is still missing, then the take.
+                                if kind == ci::Kind::Smithing {
+                                    for other in [0usize, 1, 2] {
+                                        if game.slot_view(600 + other).is_none() {
+                                            lines.push((Text::literal(format!("\u{a7}8{}", ci::smithing_missing(other))), u32::MAX));
+                                        }
+                                    }
+                                }
+                                lines.push((Text::literal(format!("\u{a7}7{}", ci::SURFACE_TAKE)), u32::MAX));
                             }
                         }
                     }
-                    (None, ci::Kind::Cartography) if held.is_some() => {
-                        lines.push((Text::literal(format!("\u{a7}e{}", ci::cartography_effect(""))), u32::MAX));
-                    }
-                    _ => {}
                 }
-            } else if held.is_some() {
-                lines.push((Text::literal(format!("\u{a7}7{}", ci::SURFACE_TAKE)), u32::MAX));
             }
+        } else {
+            lines.push((Text::literal(format!("\u{a7}7{}", ci::spot_title(kind, slot))), u32::MAX));
         }
         game.draw_tooltip_lines(batch, &lines, x, y);
     }
@@ -501,6 +669,10 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
     }
     if ci::is_surface(ci::kind()) {
         draw_surface(game, batch);
+        return ::core::ops::ControlFlow::Break(());
+    }
+    if ci::is_crafter() {
+        draw_crafter(game, batch);
         return ::core::ops::ControlFlow::Break(());
     }
     let (x, y) = game.cursor;

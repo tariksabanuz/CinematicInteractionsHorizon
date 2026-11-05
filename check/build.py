@@ -3,7 +3,7 @@ here = pathlib.Path(__file__).parent
 b = here.parent / 'mixins' / 'cinematic_interactions'
 t = (here / 'template.rs').read_text().replace('//SCENE//', (b / 'scene.rs').read_text())
 for f in sorted(b.glob('*.rs')):
-    if f.name == 'scene.rs':
+    if f.name in ('scene.rs', 'dx12_terrain.rs'):
         continue
     name = f.stem
     src = re.sub(r'\bfn cinematic_\w+\(', f'fn __{name}(', f.read_text(), count=1)
@@ -12,7 +12,9 @@ for f in sorted(b.glob('*.rs')):
         sys.exit(f'no place for {f.name}')
     t = t.replace(key, src)
 (here / 'check.rs').write_text(t)
-args = ['--edition', '2024', '--crate-name', 'horizon_client', '-L', '/tmp', '--extern', 'glam=/tmp/libglam.rlib']
+winit = here / 'winit_stub.rs'
+subprocess.run(['rustc', '--edition', '2021', '--crate-type', 'lib', '--crate-name', 'winit', str(winit), '-o', '/tmp/libwinit.rlib'], check=True)
+args = ['--edition', '2024', '--crate-name', 'horizon_client', '-L', '/tmp', '--extern', 'glam=/tmp/libglam.rlib', '--extern', 'winit=/tmp/libwinit.rlib']
 r = subprocess.run(['rustc', *args, '--crate-type', 'lib', 'check.rs', '-o', '/tmp/ci_check.rlib'], cwd=here, capture_output=True, text=True)
 print(r.stderr[-12000:])
 if r.returncode or '--test' not in sys.argv:

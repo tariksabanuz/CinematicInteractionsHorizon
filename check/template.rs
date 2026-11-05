@@ -4,6 +4,7 @@
 extern crate self as horizon_client;
 extern crate self as horizon_assets;
 extern crate self as horizon_client_render;
+extern crate self as horizon_client_lib;
 
 pub type Result<T, E = String> = std::result::Result<T, E>;
 
@@ -82,6 +83,10 @@ pub mod crafting {
     impl Recipes { pub fn cook(&self, kind: &str, input: &crate::items::ItemStack) -> Option<&Cooking> { None } }
 }
 pub mod menu {
+    pub struct Stonecutter { pub recipes: Vec<usize>, pub input: Option<std::sync::Arc<str>>, pub used: Option<usize> }
+    pub struct Menu;
+    pub struct Env;
+    impl Menu { pub fn button(&mut self, env: &Env, id: i32) -> bool { true } }
     #[derive(Clone, Copy, PartialEq, Eq, Debug)] pub enum Input { Pickup, QuickMove, Swap, Clone, Throw, QuickCraft, PickupAll }
     pub mod place { pub struct Stacked; }
 }
@@ -89,7 +94,9 @@ pub mod containers {
     #[derive(Clone, Copy, PartialEq, Eq, Debug)] pub enum FurnaceKind { Furnace, BlastFurnace, Smoker }
     #[derive(Clone, Debug)] pub struct Furnace { pub kind: FurnaceKind, pub items: [Option<crate::items::ItemStack>; 3], pub lit_remaining: i32, pub lit_total: i32, pub cooking_timer: i32, pub cooking_total: i32, pub speed: f32 }
     #[derive(Clone, Debug)] pub struct Beacon { pub levels: i32, pub primary: Option<String>, pub secondary: Option<String> }
-    #[derive(Clone, Debug)] pub enum BlockEntity { Chest(Vec<Option<crate::items::ItemStack>>), Furnace(Furnace), Beacon(Box<Beacon>), Campfire(Box<Campfire>), ChiseledBookshelf(Box<ChiseledBookshelf>) }
+    #[derive(Clone, Debug)] pub enum BlockEntity { Chest(Vec<Option<crate::items::ItemStack>>), Furnace(Furnace), Beacon(Box<Beacon>), Campfire(Box<Campfire>), ChiseledBookshelf(Box<ChiseledBookshelf>), Crafter(Crafter), Brewing(Box<BrewingStand>) }
+    #[derive(Clone, Debug, Default)] pub struct Crafter { pub items: [Option<crate::items::ItemStack>; 9], pub disabled: [bool; 9], pub triggered: bool, pub crafting_ticks: i32 }
+    #[derive(Clone, Debug, Default)] pub struct BrewingStand { pub items: [Option<crate::items::ItemStack>; 5], pub brew_time: i32, pub fuel: i32 }
     #[derive(Clone, Debug, Default)] pub struct ChiseledBookshelf { pub items: [Option<crate::items::ItemStack>; 6], pub last_slot: i32 }
     #[derive(Clone, Debug, Default)] pub struct Campfire { pub items: [Option<crate::items::ItemStack>; 4], pub progress: [i32; 4], pub total: [i32; 4] }
 }
@@ -98,6 +105,8 @@ pub mod container_screen { pub struct Clicks; impl Clicks { pub fn skip_release(
 pub mod ui {
     use crate::hud::{HudAtlas, HudBatch};
     use crate::text::Text;
+    pub struct EditBox { pub value: String, pub cursor: usize, pub highlight: usize, pub focused: bool }
+    impl EditBox { pub fn set_value(&mut self, value: &str) {} pub fn cursor_visible(&self) -> bool { true } pub fn reset_blink(&mut self) {} }
     pub fn button(batch: &mut HudBatch, atlas: &HudAtlas, x: f32, y: f32, w: f32, h: f32, label: &Text, active: bool, hover: bool) {}
     pub fn slider(batch: &mut HudBatch, atlas: &HudAtlas, x: f32, y: f32, w: f32, label: &Text, value: f32, hover: bool, active: bool, dragging: bool) {}
     pub fn slider_value(x: f32, w: f32, cx: f32) -> f32 { 0.0 }
@@ -173,7 +182,9 @@ pub mod game {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)] pub(crate) enum Dim { Overworld, Nether, End }
     pub struct Enchantments;
     impl Enchantments { pub fn full_name(&self, id: &str, level: u32) -> (String, bool) { (String::new(), false) } }
-    pub struct StationData { pub enchantments: Enchantments }
+    pub struct Stonecutting { pub id: String, pub result: ItemStack }
+    pub struct StationRecipes { pub stonecutting: Vec<Stonecutting> }
+    pub struct StationData { pub enchantments: Enchantments, pub recipes: StationRecipes }
     pub struct Remote;
     pub struct Game<'a> {
         pub(crate) screen: Screen, pub(crate) craft_size: usize, pub(crate) station: Option<stations::Station>, pub(crate) creative: bool, pub(crate) experience: Experience, pub(crate) container: Option<(i32, i32, i32)>, pub(crate) craft_table: Option<[i32; 3]>, pub(crate) remote: Option<Remote>,
@@ -237,6 +248,11 @@ pub mod game {
         pub(crate) fn tick_server(&mut self, paused: bool) -> Result<()> { Ok(()) }
         pub(crate) fn campfire_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) {}
         pub(crate) fn native_config_dir() -> Result<std::path::PathBuf, String> { Err(String::new()) }
+        pub(crate) fn crafter_result(&self) -> Option<ItemStack> { None }
+        pub(crate) fn stack_tooltip(&self, stack: &ItemStack) -> Vec<(crate::text::Text, u32)> { Vec::new() }
+        pub(crate) fn menu_session(&mut self, run: impl FnOnce(&mut crate::menu::Menu, &crate::menu::Env, &dyn Fn(usize) -> Option<usize>) -> Option<bool>) -> bool { true }
+        pub(crate) fn remote_station_button(&self, button: i32) {}
+        pub(crate) fn station_changed(&mut self) {}
     }
     //HANDS//
     //SLOT_AT//
@@ -270,10 +286,13 @@ pub mod game {
         use crate::hud::{HudBatch, rgba};
         use crate::items::ItemStack;
         #[derive(Clone, Default, Debug)] pub struct EnchantOffers { pub costs: [i32; 3], pub clues: [Option<(std::sync::Arc<str>, u32)>; 3] }
-        pub struct Station { pub(crate) pos: [i32; 3], pub(crate) inputs: Vec<Option<ItemStack>>, pub(crate) result: Option<ItemStack>, pub(crate) offers: EnchantOffers, pub(crate) beacon: [Option<usize>; 2], pub(crate) beacon_levels: Option<i32>, pub(crate) loom: LoomState, pub(crate) anvil: AnvilState, pub(crate) name: String }
+        pub struct Station { pub(crate) pos: [i32; 3], pub(crate) inputs: Vec<Option<ItemStack>>, pub(crate) result: Option<ItemStack>, pub(crate) offers: EnchantOffers, pub(crate) beacon: [Option<usize>; 2], pub(crate) beacon_levels: Option<i32>, pub(crate) loom: LoomState, pub(crate) anvil: AnvilState, pub(crate) name: String, pub(crate) stone: crate::menu::Stonecutter, pub(crate) rename: crate::ui::EditBox }
         pub struct AnvilState { pub cost: i32 }
         pub struct LoomState { pub(crate) display: bool }
         //STATION_CLICK//
+        //STONE_SCROLL//
+        //NAME_TYPING//
+        //NAME_KEY//
     }
     pub mod fov {
         //FOV//
