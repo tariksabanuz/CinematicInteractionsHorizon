@@ -2,7 +2,7 @@
 // and the crafted item (or a furnace's openings) are the slots under the cursor, so every click
 // works as in the screen.
 fn cinematic_slot_at(game: &crate::game::Game<'_>, batch: &HudBatch, x: f32, y: f32) -> ::core::ops::ControlFlow<Option<usize>> {
-    use horizon_client::native_cinematic_interactions_scene as ci;
+    use horizon_client_lib::native_cinematic_interactions_scene as ci;
     if !ci::controls() {
         return ::core::ops::ControlFlow::Continue(());
     }

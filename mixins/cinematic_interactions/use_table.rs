@@ -2,7 +2,7 @@
 // says so ("Too low"), a sneak click with an empty hand opens the normal screen, any other click
 // the scene (the camera walks to the block and leans over it).
 fn cinematic_use(game: &mut crate::game::Game<'_>, hand: Hand) -> ::core::ops::ControlFlow<bool> {
-    use horizon_client::native_cinematic_interactions_scene as ci;
+    use horizon_client_lib::native_cinematic_interactions_scene as ci;
     if hand != Hand::Main || !ci::is_active() || game.spectator() || ci::own_use() {
         return ::core::ops::ControlFlow::Continue(());
     }

@@ -1,7 +1,7 @@
 // The world's crafting tables that keep items: the items lie on the top in their cells, as the
 // scene laid them (CampfireRenderer's pass, items of the block entities).
 fn cinematic_table_draw(game: &crate::game::Game<'_>, camera: glam::DVec3, out: &mut Vec<horizon_client::mesher::Vertex>) {
-    use horizon_client::native_cinematic_interactions_scene as ci;
+    use horizon_client_lib::native_cinematic_interactions_scene as ci;
     use horizon_assets::item_model::DisplayContext;
     let dim = format!("{:?}", game.dim);
     for t in ci::kept_tables() {

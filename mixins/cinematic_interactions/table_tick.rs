@@ -1,7 +1,7 @@
 // The server's tick: the world's kept tables are read once; a kept table that is no longer there
 // (broken, in a loaded chunk) drops what lay on it, as a container's block does.
 fn cinematic_table_tick(game: &mut crate::game::Game<'_>, paused: bool) {
-    use horizon_client::native_cinematic_interactions_scene as ci;
+    use horizon_client_lib::native_cinematic_interactions_scene as ci;
     if paused || game.remote.is_some() {
         return;
     }

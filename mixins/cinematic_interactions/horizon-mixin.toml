@@ -9,7 +9,7 @@ horizon_revision = "9d979caa48a3bb58203319b9ea044db58c38e0d8"
 # The scene: camera, hands, the cursor on the table, the screen's drawing, range and settings.
 [[module]]
 id = "scene"
-file = "crates/horizon-client/src/lib.rs"
+file = "crates/horizon-client/src/client_lib.rs"
 name = "native_cinematic_interactions_scene"
 source = "scene.rs"
 visibility = "pub"
@@ -18,7 +18,7 @@ visibility = "pub"
 # The settings screen opened from the Options screen (the jar's CinematicSettingsScreen).
 [[module]]
 id = "menu"
-file = "crates/horizon-client/src/lib.rs"
+file = "crates/horizon-client/src/client_lib.rs"
 name = "native_cinematic_menu"
 source = "menu.rs"
 visibility = "pub"

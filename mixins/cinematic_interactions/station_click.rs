@@ -3,7 +3,7 @@
 // payment lights the beacon once a power is chosen; any other click goes to the slot under the
 // cursor (a spot of the station or the panel), with the menu's own click.
 fn cinematic_station_click(game: &mut crate::game::Game<'_>, right: bool) -> ::core::ops::ControlFlow<bool> {
-    use horizon_client::native_cinematic_interactions_scene as ci;
+    use horizon_client_lib::native_cinematic_interactions_scene as ci;
     let kind = ci::kind();
     if !ci::controls() || !ci::is_surface(kind) {
         return ::core::ops::ControlFlow::Continue(());
