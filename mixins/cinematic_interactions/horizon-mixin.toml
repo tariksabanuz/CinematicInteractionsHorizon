@@ -348,3 +348,16 @@ bindings = [
   { name = "key", ty = "KeyCode", value = "key" },
   { name = "text", ty = "Option<&str>", value = "text" },
 ]
+
+# DX12: Horizon's terrain shader writes a vector element at a run-time index, which FXC rejects
+# (X3500) and the game crashes on start. The "Horizon terrain" module gets the same math without it.
+[[injection]]
+id = "dx12-terrain"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client_render::gfx::reuse::On<'_>::create_shader_module"
+helper = "dx12_terrain.rs"
+bindings = [
+  { name = "this", ty = "&On<'_>", value = "self" },
+  { name = "descriptor", ty = "&wgpu::ShaderModuleDescriptor<'_>", value = "&descriptor" },
+]
