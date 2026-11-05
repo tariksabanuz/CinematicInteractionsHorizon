@@ -1,7 +1,7 @@
-//! The jar's settings screen (CinematicSettingsScreen): "Cinematic Interactions — Settings" with a
-//! search box, the General, Stations, Camera and Advanced tabs, a scrolling list of options, a box
-//! that says what the pointed option does, and Reset all, Cancel and Done. It is opened from the
-//! "Cinematic Interaction Settings..." button on the Options screen and drawn in its place.
+// The jar's settings screen (CinematicSettingsScreen): "Cinematic Interactions — Settings" with a
+// search box, the General, Stations, Camera and Advanced tabs, a scrolling list of options, a box
+// that says what the pointed option does, and Reset all, Cancel and Done. It is opened from the
+// "Cinematic Interaction Settings..." button on the Options screen and drawn in its place.
 
 use crate::hud::{HudAtlas, HudBatch, rgba};
 use crate::native_cinematic_interactions_scene as ci;
