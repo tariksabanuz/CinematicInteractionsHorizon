@@ -1,5 +1,5 @@
-//! The "Cinematic Interaction Settings..." button on the Options screen: where it was laid out
-//! last, for the mouse hook, and the guard of the layout hook's own call of the layout.
+// The "Cinematic Interaction Settings..." button on the Options screen: where it was laid out
+// last, for the mouse hook, and the guard of the layout hook's own call of the layout.
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
