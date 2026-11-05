@@ -1,16 +1,17 @@
 {
-  "horizon_revision": "9d979caa48a3bb58203319b9ea044db58c38e0d8",
+  "horizon_revision": "6475f62f3c834b7489e1816bf47f47ea5eb2b879",
   "horizon_repository": "https://github.com/horizon-rust/horizon",
   "horizon_mixins_repository": "https://github.com/horizon-rust/horizon-mixins",
   "horizon_mixins_revision": "d9c83d7096b7ea5b83678da2efdfd6161f74997e",
   "mixin_schema": 6,
   "source_sha256": {
-    "crates/horizon-client/src/lib.rs": "2559e4a2dae4133a5415038d423a71caf14b5dbcd2fd9215146e1be0c0bdeeba",
-    "crates/horizon-client/src/game.rs": "3b01e2599763a3787c65db32ddcd663d01b665d224e48609a39006f73979d0dc",
-    "crates/horizon-client/src/game/perspective.rs": "4910c20b90261802e0f870023ceb03daf6a2f7ba424a6a5ed40a0c88d67d38e8",
-    "crates/horizon-client/src/game/remote.rs": "3d15b210ffe03ad5721c3c83cca2bfae651ac4e5c962558810d77deb8a474123",
-    "crates/horizon-client/src/game/fov.rs": "6cc5995620c55dbe305879dd2dc7dfecba88f1843df3d93d4c6b5a9a0ecf4538",
-    "crates/horizon-client/src/game/native_hooks.rs": "1597f5f904d7c7fa807264faeecb5257642ba1720b153f0f1c35ef79c94a5ab9",
-    "crates/horizon-client/src/game/recipe_book.rs": "ddc2737c026d0eb7fd30028e3569315d21a9472a40203cf9be6feb79363ea94d"
+    "crates/horizon-client/src/lib.rs": "3899ca984b7853a9c3f5e852f4eb24670be60dd2a24ab357c4ce46c6444fafcc",
+    "crates/horizon-client/src/game.rs": "1a30f99befb670aaab36fe7ccc757bf5c136a68450798c8fe01faed8502249be",
+    "crates/horizon-client/src/game/perspective.rs": "87a1cbc45fd209fafdbd89bd002ad0a58befe16408b83c92a8e58adf5a2cc38e",
+    "crates/horizon-client/src/game/remote.rs": "2d40f76c67a1c20365cec165bfeeb20710da1424253fbb2992378eb617408955",
+    "crates/horizon-client/src/game/fov.rs": "a7cd690790f54e131c3a0251261b8779d1114429bf22f6c226745cdb0da95450",
+    "crates/horizon-client/src/game/native_hooks.rs": "14499fd0c9c8af48dd8ac5d09b0339bd1766461a7e7911143c5ac45e017334c4",
+    "crates/horizon-client/src/game/recipe_book.rs": "d3d8d8eb7a63e52ed53ff84a1ac492a4244ffa9ed709c4e7a9947028b9d97106",
+    "crates/horizon-client/src/client_lib.rs": "7f6233fd6dd70e055470b80ccf4614049f5b96e0a9fba7d95a07e547d0fc555d"
   }
 }

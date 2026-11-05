@@ -3,7 +3,7 @@
 // At the table the grid's items lie on its top, the crafted item floats over its far edge and the
 // tabletop guide shows faint; at a furnace the items lie in its openings and the zone under the
 // cursor is framed. A carried stack is in the reaching hand.
-fn cinematic_hands(game: &mut crate::game::Game<'_>, alpha: f64) -> ::core::ops::ControlFlow<Vec<Vertex>> {
+fn cinematic_hands(game: &mut crate::game::Game<'_>, alpha: f64) -> ::core::ops::ControlFlow<(Vec<Vertex>, Vec<(u32, i32)>)> {
     use horizon_client_lib::native_cinematic_interactions_scene as ci;
     use horizon_assets::item_model::DisplayContext;
     let furnace = ci::is_furnace(ci::kind());
@@ -260,5 +260,5 @@ fn cinematic_hands(game: &mut crate::game::Game<'_>, alpha: f64) -> ::core::ops:
     for vertex in &mut out {
         vertex.layer &= !horizon_client::gfx::OIT_ENTITY;
     }
-    ::core::ops::ControlFlow::Break(out)
+    ::core::ops::ControlFlow::Break((out, Vec::new()))
 }
