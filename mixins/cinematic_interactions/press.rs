@@ -1,6 +1,6 @@
 // A click on the book button or in the recipe panel goes to the panel, not to the table behind it.
 fn cinematic_press(game: &mut crate::game::Game<'_>, right: bool) -> ::core::ops::ControlFlow<()> {
-    use horizon_client::native_cinematic_interactions as ci;
+    use horizon_client::native_cinematic_interactions_scene as ci;
     let kind = ci::kind();
     // RMB on the station beside this one: the scene moves over to it (the jar's "move over"): this
     // one closes and the other is used as a click on it would.

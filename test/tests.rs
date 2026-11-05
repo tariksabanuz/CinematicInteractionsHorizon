@@ -1,4 +1,4 @@
-use crate::native_cinematic_interactions as ci;
+use crate::native_cinematic_interactions_scene as ci;
 use glam::{DVec3, Vec3};
 use std::time::{Duration, Instant};
 

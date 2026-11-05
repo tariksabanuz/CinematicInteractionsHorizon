@@ -4,7 +4,7 @@
 //! "Cinematic Interaction Settings..." button on the Options screen and drawn in its place.
 
 use crate::hud::{HudAtlas, HudBatch, rgba};
-use crate::native_cinematic_interactions as ci;
+use crate::native_cinematic_interactions_scene as ci;
 use crate::text::Text;
 use std::sync::Mutex;
 

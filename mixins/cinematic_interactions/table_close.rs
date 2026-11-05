@@ -2,7 +2,7 @@
 // lies on it. The grid's plain stacks stay on the table (kept with the world); anything else, and
 // any world without a folder, goes back to the player as vanilla gives it.
 fn cinematic_table_close(game: &mut crate::game::Game<'_>) {
-    use horizon_client::native_cinematic_interactions as ci;
+    use horizon_client::native_cinematic_interactions_scene as ci;
     if !ci::is_active() || game.remote.is_some() || game.craft_size != 3 {
         return;
     }

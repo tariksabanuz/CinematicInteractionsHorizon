@@ -8,7 +8,7 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
     // smelting is, how long the fire burns; with a stack in the hand, whether the zone takes it.
     // The station beside this one under the cursor: its outline and "Name  RMB — move over".
     fn draw_neighbour(game: &mut crate::game::Game<'_>, batch: &mut HudBatch, busy: bool) {
-        use horizon_client::native_cinematic_interactions as ci;
+        use horizon_client::native_cinematic_interactions_scene as ci;
         use horizon_client::hud::rgba;
         let (x, y) = game.cursor;
         let (t, yaw) = ci::table();
@@ -51,7 +51,7 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
         batch.text(atlas, &label, lx, ly, rgba(255, 255, 255, 255), true);
     }
     fn draw_furnace(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) {
-        use horizon_client::native_cinematic_interactions as ci;
+        use horizon_client::native_cinematic_interactions_scene as ci;
         use horizon_client::text::Text;
         let kind = ci::kind();
         let (x, y) = game.cursor;
@@ -113,12 +113,12 @@ fn cinematic_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::c
         }
         game.draw_tooltip_lines(batch, &lines, x, y);
     }
-    use horizon_client::native_cinematic_interactions as ci;
+    use horizon_client::native_cinematic_interactions_scene as ci;
     // SmithingStation and CartographyStation in the scene: the panel, the hint and, over a spot,
     // what goes there (gold), what lies there and, on the worked spot, what it makes; a stack
     // the spot can't take is refused in red.
     fn draw_surface(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) {
-        use horizon_client::native_cinematic_interactions as ci;
+        use horizon_client::native_cinematic_interactions_scene as ci;
         use horizon_client::text::Text;
         use horizon_client::hud::rgba;
         let kind = ci::kind();

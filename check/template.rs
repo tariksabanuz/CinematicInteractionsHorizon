@@ -123,7 +123,7 @@ pub mod native_cinematic_menu {
 pub mod native_cinematic_button {
 //BUTTON//
 }
-pub mod native_cinematic_interactions {
+pub mod native_cinematic_interactions_scene {
 //SCENE//
 }
 

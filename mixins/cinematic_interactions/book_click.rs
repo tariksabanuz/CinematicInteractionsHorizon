@@ -2,7 +2,7 @@
 // the filter, the pages, a recipe (its tabletop guide), "x" and "Lay out" (the hands lay it out,
 // cell by cell, with the menu's own clicks, so any recipe goes down, known or not).
 fn cinematic_book_click(game: &mut crate::game::Game<'_>, right: bool) -> ::core::ops::ControlFlow<bool> {
-    use horizon_client::native_cinematic_interactions as ci;
+    use horizon_client::native_cinematic_interactions_scene as ci;
     if !ci::controls() || !ci::table_scene() {
         return ::core::ops::ControlFlow::Continue(());
     }

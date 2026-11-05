@@ -1,6 +1,6 @@
 [mod]
 id = "cinematic_interactions"
-version = "0.11.0"
+version = "0.11.1"
 priority = 100
 
 [compatibility]
@@ -10,7 +10,7 @@ horizon_revision = "9d979caa48a3bb58203319b9ea044db58c38e0d8"
 [[module]]
 id = "scene"
 file = "crates/horizon-client/src/lib.rs"
-name = "native_cinematic_interactions"
+name = "native_cinematic_interactions_scene"
 source = "scene.rs"
 visibility = "pub"
 

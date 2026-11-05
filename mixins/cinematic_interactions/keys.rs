@@ -1,6 +1,6 @@
 // At the table a step (W, A, S, D) or a jump leaves it, as Esc and E do.
 fn cinematic_keys(game: &mut crate::game::Game<'_>, key: KeyCode) -> ::core::ops::ControlFlow<Result<()>> {
-    use horizon_client::native_cinematic_interactions as ci;
+    use horizon_client::native_cinematic_interactions_scene as ci;
     // H at a campfire: sit by the fire (CampfireHint; the jar's key.cinematic.sit).
     if key == KeyCode::KeyH && ci::is_active() && game.screen == crate::game::Screen::Playing && !game.spectator() {
         let Some(hit) = game.pick() else {

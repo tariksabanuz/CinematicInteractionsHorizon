@@ -3,7 +3,7 @@
 // 16 a page), the pages and the chosen recipe with "Lay out". Each frame it also takes the steps of
 // laying a recipe out that the hands have reached.
 fn cinematic_book_draw(game: &mut crate::game::Game<'_>, batch: &mut HudBatch) -> ::core::ops::ControlFlow<()> {
-    use horizon_client::native_cinematic_interactions as ci;
+    use horizon_client::native_cinematic_interactions_scene as ci;
     use std::hash::{Hash, Hasher};
     if !ci::controls() || !ci::table_scene() {
         return ::core::ops::ControlFlow::Continue(());
