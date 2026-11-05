@@ -4,7 +4,7 @@ fn cinematic_options_key(
     key: KeyCode,
     text: Option<&str>,
 ) -> ::core::ops::ControlFlow<Result<()>> {
-    use horizon_client::native_cinematic_menu as menu;
+    use horizon_client_lib::native_cinematic_menu as menu;
     let _ = &game;
     if !menu::is_open() {
         return ::core::ops::ControlFlow::Continue(());

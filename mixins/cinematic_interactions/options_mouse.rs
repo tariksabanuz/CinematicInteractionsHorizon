@@ -5,7 +5,7 @@ fn cinematic_options_mouse(
     pressed: bool,
     right: bool,
 ) -> ::core::ops::ControlFlow<Result<()>> {
-    use horizon_client::native_cinematic_menu as menu;
+    use horizon_client_lib::native_cinematic_menu as menu;
     use horizon_client_render::native_cinematic_button as cb;
     let (x, y) = game.cursor;
     if !menu::is_open() {

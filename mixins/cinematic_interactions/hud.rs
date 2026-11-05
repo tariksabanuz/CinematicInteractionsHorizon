@@ -1,7 +1,7 @@
 // Hud: while the scene shows, the game's HUD (hotbar, crosshair, chat) steps aside, as F1 hides it;
 // over everything come the black bars of the camera's glide and the range message.
 fn cinematic_hud(game: &mut crate::game::Game<'_>, size: [u32; 2]) -> ::core::ops::ControlFlow<HudBatch> {
-    use horizon_client::native_cinematic_interactions_scene as ci;
+    use horizon_client_lib::native_cinematic_interactions_scene as ci;
     if !ci::is_active() || ci::enter(4) {
         return ::core::ops::ControlFlow::Continue(());
     }

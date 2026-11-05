@@ -2,7 +2,7 @@
 // did there is the game's own use of the block (CampfireBlock and ChiseledBookShelfBlock
 // .useItemOn). A carried stack is in the hand for that moment, then back on the cursor.
 fn cinematic_campfire_tick(game: &mut crate::game::Game<'_>) {
-    use horizon_client::native_cinematic_interactions_scene as ci;
+    use horizon_client_lib::native_cinematic_interactions_scene as ci;
     use horizon_client::menu::Input;
     if let Some(shift) = ci::forge_due() {
         let input = if shift { Input::QuickMove } else { Input::Pickup };

@@ -4,7 +4,7 @@
 // tabletop guide shows faint; at a furnace the items lie in its openings and the zone under the
 // cursor is framed. A carried stack is in the reaching hand.
 fn cinematic_hands(game: &mut crate::game::Game<'_>, alpha: f64) -> ::core::ops::ControlFlow<Vec<Vertex>> {
-    use horizon_client::native_cinematic_interactions_scene as ci;
+    use horizon_client_lib::native_cinematic_interactions_scene as ci;
     use horizon_assets::item_model::DisplayContext;
     let furnace = ci::is_furnace(ci::kind());
     let surface = ci::is_surface(ci::kind());

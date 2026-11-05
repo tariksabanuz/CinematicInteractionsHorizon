@@ -1,6 +1,6 @@
 // Camera.setup: at a crafting table or another workstation the eye glides over it and stays there; leaving, it glides back.
 fn cinematic_camera(game: &mut crate::game::Game<'_>, partial: f32) -> ::core::ops::ControlFlow<Option<(glam::DVec3, f32, f32)>> {
-    use horizon_client::native_cinematic_interactions_scene as ci;
+    use horizon_client_lib::native_cinematic_interactions_scene as ci;
     if !ci::is_active() || ci::enter(1) {
         return ::core::ops::ControlFlow::Continue(());
     }
