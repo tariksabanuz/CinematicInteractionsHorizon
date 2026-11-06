@@ -1,19 +1,19 @@
 {
-  "horizon_revision": "6475f62f3c834b7489e1816bf47f47ea5eb2b879",
+  "horizon_revision": "f319701e8c9ab657ff562250b3ba07b2d654e3bc",
   "horizon_repository": "https://github.com/horizon-rust/horizon",
   "horizon_mixins_repository": "https://github.com/horizon-rust/horizon-mixins",
   "horizon_mixins_revision": "d9c83d7096b7ea5b83678da2efdfd6161f74997e",
   "mixin_schema": 6,
   "source_sha256": {
     "crates/horizon-client/src/lib.rs": "3899ca984b7853a9c3f5e852f4eb24670be60dd2a24ab357c4ce46c6444fafcc",
-    "crates/horizon-client/src/game.rs": "1a30f99befb670aaab36fe7ccc757bf5c136a68450798c8fe01faed8502249be",
-    "crates/horizon-client/src/game/perspective.rs": "87a1cbc45fd209fafdbd89bd002ad0a58befe16408b83c92a8e58adf5a2cc38e",
-    "crates/horizon-client/src/game/remote.rs": "2d40f76c67a1c20365cec165bfeeb20710da1424253fbb2992378eb617408955",
-    "crates/horizon-client/src/game/fov.rs": "a7cd690790f54e131c3a0251261b8779d1114429bf22f6c226745cdb0da95450",
-    "crates/horizon-client/src/game/native_hooks.rs": "14499fd0c9c8af48dd8ac5d09b0339bd1766461a7e7911143c5ac45e017334c4",
-    "crates/horizon-client/src/game/recipe_book.rs": "d3d8d8eb7a63e52ed53ff84a1ac492a4244ffa9ed709c4e7a9947028b9d97106",
-    "crates/horizon-client/src/client_lib.rs": "7f6233fd6dd70e055470b80ccf4614049f5b96e0a9fba7d95a07e547d0fc555d",
-    "crates/horizon-client/src/game/stations.rs": "8cd1036e26afaf1e215ed5485688ef407d0b1cf48aa695f748afe95be4f18b14",
+    "crates/horizon-client/src/game.rs": "9298b83b426fe9bb44dc0f7f31ddc9b284016a6842520cdba518e55389fbad6e",
+    "crates/horizon-client/src/game/perspective.rs": "af33310f39be7ae27073ec903055bf593cf987e45365dc78e401f2f75224d35c",
+    "crates/horizon-client/src/game/remote.rs": "e135ef6564d991b2a25ade19df2bfdcca3123dec6f1222e2722751f21f5be5b4",
+    "crates/horizon-client/src/game/fov.rs": "9c572d13df015924240562271899837c4c5bb9c6914ebaabb4470f45f5fab6de",
+    "crates/horizon-client/src/game/native_hooks.rs": "968156c94e6dd2cabd494c26fb3018c38c4ce53a73327768d7a32d4395ebe090",
+    "crates/horizon-client/src/game/recipe_book.rs": "8b1be79571b35e76bae7dc72b1a04a3f2456db15d8c847715c2aa0cf90954d6f",
+    "crates/horizon-client/src/client_lib.rs": "443c6f1eb1aa30b2334b857ecadb75bcf9495540181a70770589db6e10dd78a2",
+    "crates/horizon-client/src/game/stations.rs": "b2da9e11be90ba785ed20ce00ba4769e878e21ccebcd4ab19524b6ef7627d9ac",
     "crates/horizon-client-render/src/gfx/reuse.rs": "f418314fe469fcaaa24c2ddcfab417be542029d58de3f44e2ca1b23927cb4764"
   }
 }
