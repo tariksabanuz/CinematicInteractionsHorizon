@@ -36,10 +36,12 @@ Needs the Performance build in the launcher.
 
 ## Credits
 
-A port of [Cinematic Interactions](https://www.curseforge.com/minecraft/mc-mods/cinematic-interactions) by Southware (MIT) for Fabric and NeoForge: its layouts, camera rigs, texts and behaviour are taken from that mod's code (MIT) and rewritten in Rust for Horizon. It draws with your own game's textures and skin, and the icon is my own.
+A port of [Cinematic Interactions](https://www.curseforge.com/minecraft/mc-mods/cinematic-interactions) by Southware (MIT) for Fabric and NeoForge: its layouts, camera rigs, texts and behaviour are taken from that mod's code (MIT) and rewritten in Rust for Horizon. The anvil's hammer is an adapted "Just a Hammer" model by RDiamonds (CC BY 4.0). It draws with your own game's textures and skin, and the icon is my own.
 
 ## Building
 
 `python3 check/build.py --test` type-checks the hooks against stand-ins for the Horizon signatures they use and runs the tests. `python3 tools/package.py` writes `target/cinematic_interactions-0.12.0.hnmod`.
+
+The original work's MIT notice ships in the bundle as `mixins/cinematic_interactions/NOTICE.md`.
 
 MIT licence.
