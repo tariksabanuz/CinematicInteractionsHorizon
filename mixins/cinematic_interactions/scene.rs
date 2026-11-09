@@ -17,7 +17,7 @@ use std::time::Instant;
 
 pub const ID: &str = "cinematic_interactions";
 pub const NAME: &str = "Cinematic Interactions";
-pub const VERSION: &str = "0.12.0";
+pub const VERSION: &str = "0.12.1";
 pub const DESCRIPTION: &str = "By tariksabanuz. Right-click a crafting table: you walk up, the camera leans over it, your arms reach \
 for the grid and the items lie on the table, and stay there when you leave. Furnaces, smithing and cartography tables, \
 grindstones, brewing stands, looms, crafters, stonecutters, enchanting tables, beacons and chiseled bookshelves are worked in \
@@ -2893,7 +2893,9 @@ pub fn tables_from_text(text: &str) -> Vec<KeptTable> {
     list
 }
 
-/// The server's world: its kept tables are read once (another world's are dropped first).
+/// The server's world: its kept tables are read once (another world's are dropped first). A file
+/// that is missing is an empty list; one that exists but can't be read leaves the list unloaded, so
+/// nothing is kept or taken until it can be (a later save would otherwise overwrite it).
 pub fn tables_load(root: &str) {
     if root.is_empty() {
         return;
@@ -2903,47 +2905,90 @@ pub fn tables_load(root: &str) {
         return;
     }
     t.0 = root.to_owned();
-    t.1 = true;
-    t.2 = std::fs::read_to_string(tables_file(root)).map(|s| tables_from_text(&s)).unwrap_or_default();
+    t.1 = false;
+    t.2.clear();
+    match std::fs::read_to_string(tables_file(root)) {
+        Ok(text) => {
+            t.2 = tables_from_text(&text);
+            t.1 = true;
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => t.1 = true,
+        Err(_) => {}
+    }
 }
 
-fn tables_save(t: &(String, bool, Vec<KeptTable>)) {
-    if t.0.is_empty() {
-        return;
-    }
-    let path = tables_file(&t.0);
+/// Writes `text` to `path` so a failure never leaves a half-written file: the text goes to a side
+/// file that is flushed to disk, then renamed over the real one. Every error is returned.
+pub fn tables_write(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+    use std::io::Write;
     if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
+        std::fs::create_dir_all(dir)?;
     }
-    let _ = std::fs::write(path, tables_to_text(&t.2));
+    let side = path.with_extension("txt.tmp");
+    let done = (|| {
+        let mut f = std::fs::File::create(&side)?;
+        f.write_all(text.as_bytes())?;
+        f.sync_all()?;
+        drop(f);
+        std::fs::rename(&side, path)
+    })();
+    if done.is_err() {
+        let _ = std::fs::remove_file(&side);
+    }
+    done
+}
+
+fn tables_save(root: &str, list: &[KeptTable]) -> std::io::Result<()> {
+    if root.is_empty() {
+        return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "no world folder"));
+    }
+    tables_write(&tables_file(root), &tables_to_text(list))
 }
 
 /// A table left with items on it: they stay there. False when this world can't keep them (no
-/// folder), so they go back to the player as usual.
+/// folder, or the list could not be written to disk), so they go back to the player as usual and
+/// nothing about the table changes. A table that still has a kept entry is never overwritten (its
+/// items could not be taken off it); false then too, so neither set of items is lost.
 pub fn table_keep(root: &str, dim: &str, pos: [i32; 3], yaw: f32, items: [Option<(String, u32)>; 9]) -> bool {
     if root.is_empty() {
         return false;
     }
     tables_load(root);
     let mut t = tables();
-    t.2.retain(|k| !(k.dim == dim && k.pos == pos));
-    if items.iter().any(Option::is_some) {
-        t.2.push(KeptTable { dim: dim.to_owned(), pos, yaw, items });
+    if !t.1 || t.2.iter().any(|k| k.dim == dim && k.pos == pos) {
+        return false;
     }
-    tables_save(&t);
+    if !items.iter().any(Option::is_some) {
+        return true;
+    }
+    let mut next = t.2.clone();
+    next.push(KeptTable { dim: dim.to_owned(), pos, yaw, items });
+    if tables_save(root, &next).is_err() {
+        return false;
+    }
+    t.2 = next;
     true
 }
 
-/// The items kept on a table, taken off it (the table opens with them in its grid).
+/// The items kept on a table, taken off it (the table opens with them in its grid). They are only
+/// handed over once the list without them is on disk; when it can't be written they stay kept (in
+/// memory and in the file alike), so no stale copy can come back after a restart.
 pub fn table_take(root: &str, dim: &str, pos: [i32; 3]) -> Option<[Option<(String, u32)>; 9]> {
     if root.is_empty() {
         return None;
     }
     tables_load(root);
     let mut t = tables();
+    if !t.1 {
+        return None;
+    }
     let i = t.2.iter().position(|k| k.dim == dim && k.pos == pos)?;
-    let k = t.2.remove(i);
-    tables_save(&t);
+    let mut next = t.2.clone();
+    let k = next.remove(i);
+    if tables_save(root, &next).is_err() {
+        return None;
+    }
+    t.2 = next;
     Some(k.items)
 }
 

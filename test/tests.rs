@@ -442,6 +442,95 @@ fn kept_tables_survive_their_file() {
     assert!(ci::tables_from_text("Overworld 1 2 3 0|-|-|-|-|-|-|-|-|-\nnonsense\n").is_empty());
 }
 
+/// A fresh world folder for the table-storage tests, with its `cinematic_interactions` folder.
+fn table_world(name: &str) -> (String, std::path::PathBuf) {
+    let root = std::env::temp_dir().join(format!("ci_tables_{name}_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let dir = root.join("cinematic_interactions");
+    std::fs::create_dir_all(&dir).unwrap();
+    (root.display().to_string(), dir)
+}
+
+fn three_cobble() -> [Option<(String, u32)>; 9] {
+    let mut items: [Option<(String, u32)>; 9] = Default::default();
+    items[0] = Some(("minecraft:cobblestone".into(), 3));
+    items
+}
+
+/// Makes the next write fail: the side file the atomic write uses is a folder.
+fn block_writes(dir: &std::path::Path) {
+    std::fs::create_dir_all(dir.join("tables.txt.tmp")).unwrap();
+}
+
+fn unblock_writes(dir: &std::path::Path) {
+    std::fs::remove_dir_all(dir.join("tables.txt.tmp")).unwrap();
+}
+
+#[test]
+fn closing_a_table_keeps_its_items_in_the_file() {
+    let (root, dir) = table_world("close_ok");
+    assert!(ci::table_keep(&root, "Overworld", [1, 64, 2], 90.0, three_cobble()));
+    assert_eq!(ci::kept_tables().len(), 1);
+    let file = std::fs::read_to_string(dir.join("tables.txt")).unwrap();
+    assert_eq!(ci::tables_from_text(&file), ci::kept_tables());
+    assert!(!dir.join("tables.txt.tmp").exists());
+}
+
+#[test]
+fn closing_a_table_that_cannot_be_saved_gives_the_items_back() {
+    // The close: table_keep says false, so the mixin leaves the grid alone and vanilla returns it.
+    let (root, dir) = table_world("close_fail");
+    block_writes(&dir);
+    assert!(!ci::table_keep(&root, "Overworld", [1, 64, 2], 90.0, three_cobble()));
+    assert!(ci::kept_tables().is_empty());
+    assert!(!dir.join("tables.txt").exists());
+    // Once the disk works again the same items can be kept.
+    unblock_writes(&dir);
+    assert!(ci::table_keep(&root, "Overworld", [1, 64, 2], 90.0, three_cobble()));
+    assert_eq!(ci::kept_tables().len(), 1);
+}
+
+#[test]
+fn a_world_with_an_unreadable_file_keeps_and_takes_nothing() {
+    // tables.txt exists but can't be read (here it is a folder): it must not be overwritten.
+    let (root, dir) = table_world("unreadable");
+    std::fs::create_dir_all(dir.join("tables.txt")).unwrap();
+    assert!(!ci::table_keep(&root, "Overworld", [1, 64, 2], 90.0, three_cobble()));
+    assert!(ci::table_take(&root, "Overworld", [1, 64, 2]).is_none());
+    assert!(dir.join("tables.txt").is_dir());
+}
+
+#[test]
+fn opening_a_table_hands_the_items_over_once() {
+    let (root, dir) = table_world("open_ok");
+    assert!(ci::table_keep(&root, "Overworld", [1, 64, 2], 90.0, three_cobble()));
+    assert_eq!(ci::table_take(&root, "Overworld", [1, 64, 2]), Some(three_cobble()));
+    // Gone from memory and from the file: a restart can't bring a copy back.
+    assert!(ci::kept_tables().is_empty());
+    assert!(ci::tables_from_text(&std::fs::read_to_string(dir.join("tables.txt")).unwrap()).is_empty());
+    assert!(ci::table_take(&root, "Overworld", [1, 64, 2]).is_none());
+}
+
+#[test]
+fn opening_a_table_that_cannot_be_saved_leaves_the_items_kept() {
+    // The open: table_take says None, so the grid stays empty and the items stay on the table,
+    // in memory and in the file alike (no stale copy after a restart, nothing lost either).
+    let (root, dir) = table_world("open_fail");
+    assert!(ci::table_keep(&root, "Overworld", [1, 64, 2], 90.0, three_cobble()));
+    block_writes(&dir);
+    assert!(ci::table_take(&root, "Overworld", [1, 64, 2]).is_none());
+    assert_eq!(ci::kept_tables().len(), 1);
+    let file = std::fs::read_to_string(dir.join("tables.txt")).unwrap();
+    assert_eq!(ci::tables_from_text(&file), ci::kept_tables());
+    // Closing it again with new items must not overwrite what is still kept there.
+    assert!(!ci::table_keep(&root, "Overworld", [1, 64, 2], 0.0, three_cobble()));
+    assert_eq!(ci::kept_tables().len(), 1);
+    // When the disk works again the items can be taken, exactly once.
+    unblock_writes(&dir);
+    assert_eq!(ci::table_take(&root, "Overworld", [1, 64, 2]), Some(three_cobble()));
+    assert!(ci::kept_tables().is_empty());
+}
+
 #[test]
 fn the_campfire_spots_are_the_renderers() {
     // Facing south (0): spot 0 is the renderer's first corner, all four 0.3125 out at 0.449.
