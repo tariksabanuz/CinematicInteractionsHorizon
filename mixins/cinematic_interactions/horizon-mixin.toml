@@ -1,10 +1,10 @@
 [mod]
 id = "cinematic_interactions"
-version = "0.12.1"
+version = "0.12.2"
 priority = 100
 
 [compatibility]
-horizon_revision = "66f3981f522b24c250b21523a70080965b940424"
+horizon_revision = "fdc87aecdbd116bf1e08adcd062fcbaea8c2e2ca"
 
 # The scene: camera, hands, the cursor on the table, the screen's drawing, range and settings.
 [[module]]

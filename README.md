@@ -40,7 +40,7 @@ A port of [Cinematic Interactions](https://www.curseforge.com/minecraft/mc-mods/
 
 ## Building
 
-`python3 check/build.py --test` type-checks the hooks against stand-ins for the Horizon signatures they use and runs the tests. `python3 tools/package.py` writes `target/cinematic_interactions-0.12.1.hnmod`.
+`python3 check/build.py --test` type-checks the hooks against stand-ins for the Horizon signatures they use and runs the tests. `python3 tools/package.py` writes `target/cinematic_interactions-0.12.2.hnmod`.
 
 The original work's MIT notice ships in the bundle as `mixins/cinematic_interactions/NOTICE.md`.
 

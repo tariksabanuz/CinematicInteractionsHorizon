@@ -17,7 +17,7 @@ use std::time::Instant;
 
 pub const ID: &str = "cinematic_interactions";
 pub const NAME: &str = "Cinematic Interactions";
-pub const VERSION: &str = "0.12.1";
+pub const VERSION: &str = "0.12.2";
 pub const DESCRIPTION: &str = "By tariksabanuz. Right-click a crafting table: you walk up, the camera leans over it, your arms reach \
 for the grid and the items lie on the table, and stay there when you leave. Furnaces, smithing and cartography tables, \
 grindstones, brewing stands, looms, crafters, stonecutters, enchanting tables, beacons and chiseled bookshelves are worked in \
